@@ -12,17 +12,26 @@ import {
 
 export const maxDuration = 60;
 
+async function describeWithRetry(imageUrl: string): Promise<string> {
+  try {
+    return await describeImage(imageUrl);
+  } catch (firstError) {
+    try {
+      return await describeImage(imageUrl);
+    } catch (secondError) {
+      const msg = secondError instanceof Error ? secondError.message : String(secondError);
+      return `could not read camera frame (${msg.slice(0, 120)})`;
+    }
+  }
+}
+
 async function checkRoute(route: (typeof ROUTES)[number]): Promise<RouteStatus> {
   const checkpoints = await Promise.all(
-    route.checkpoints.map(async (cp) => {
-      let description = 'could not read camera frame';
-      try {
-        description = await describeImage(cp.imageUrl);
-      } catch {
-        // leave the fallback description
-      }
-      return { title: cp.title, imageUrl: cp.imageUrl, description };
-    }),
+    route.checkpoints.map(async (cp) => ({
+      title: cp.title,
+      imageUrl: cp.imageUrl,
+      description: await describeWithRetry(cp.imageUrl),
+    })),
   );
   const state = checkpoints
     .map((c, i) => `${i + 1}. ${c.title}: ${c.description}`)
