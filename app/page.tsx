@@ -4,54 +4,62 @@ import type { RouteStatus } from '../lib/store';
 
 export const dynamic = 'force-dynamic';
 
-const SEVERITY_LABELS = ['Clear', 'Light', 'Moderate', 'Severe'];
-const SEVERITY_COLORS = ['#16a34a', '#84cc16', '#f59e0b', '#dc2626'];
+type Tone = 'good' | 'warn' | 'bad';
 
-function SeverityBadge({ score }: { score: number }) {
+function toneForScore(score: number): Tone {
+  if (score < 1) return 'good';
+  if (score < 3) return 'warn';
+  return 'bad';
+}
+
+function headlineForScore(score: number): string {
+  if (score < 1) return 'GO NOW — ROUTE CLEAR';
+  if (score < 2) return 'MINOR DELAYS';
+  if (score < 3) return 'HEAVY TRAFFIC BUILDING';
+  return 'SEVERE — HOLD OR REROUTE';
+}
+
+function SeverityMeter({ score, label }: { score: number; label: string }) {
   const idx = Math.round(Math.min(3, Math.max(0, score)));
+  const tone = toneForScore(score);
+  const litClass = tone === 'good' ? 'lit-good' : tone === 'warn' ? 'lit-warn' : 'lit-bad';
   return (
-    <span
-      style={{
-        background: SEVERITY_COLORS[idx],
-        color: 'white',
-        padding: '4px 10px',
-        borderRadius: 999,
-        fontSize: 13,
-        fontWeight: 600,
-      }}
-    >
-      {SEVERITY_LABELS[idx]} ({score.toFixed(1)})
-    </span>
+    <>
+      <span className="severity-label">{label}</span>
+      <span className="severity-meter" aria-hidden="true">
+        {[0, 1, 2, 3].map((bar) => (
+          <span key={bar} className={`severity-bar${bar <= idx ? ` ${litClass}` : ''}`} />
+        ))}
+      </span>
+    </>
   );
 }
 
-function RouteSection({ route }: { route: RouteStatus }) {
+const SEVERITY_WORDS = ['CLEAR', 'LIGHT', 'MODERATE', 'SEVERE'];
+
+function severityWord(score: number) {
+  return SEVERITY_WORDS[Math.round(Math.min(3, Math.max(0, score)))];
+}
+
+function RouteSection({ route, index }: { route: RouteStatus; index: number }) {
   return (
-    <section style={{ marginBottom: 32 }}>
-      <h2 style={{ fontSize: 18, display: 'flex', alignItems: 'center', gap: 10 }}>
-        {route.label} <SeverityBadge score={route.delaySeverityScore} />
-      </h2>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-          gap: 12,
-        }}
-      >
-        {route.checkpoints.map((cp) => (
-          <div
-            key={cp.title}
-            style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', background: 'white' }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={cp.imageUrl}
-              alt={cp.title}
-              style={{ width: '100%', display: 'block', aspectRatio: '4 / 3', objectFit: 'cover' }}
-            />
-            <div style={{ padding: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>{cp.title}</div>
-              <div style={{ fontSize: 12, color: '#555' }}>{cp.description}</div>
+    <section className="route-section">
+      <div className="route-heading">
+        <span className="route-index">{String(index).padStart(2, '0')}</span>
+        <h2 className="route-name">{route.label}</h2>
+        <SeverityMeter score={route.delaySeverityScore} label={severityWord(route.delaySeverityScore)} />
+      </div>
+      <div className="feed-grid">
+        {route.checkpoints.map((cp, i) => (
+          <div className="feed-tile" key={cp.title}>
+            <div className="feed-frame">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={cp.imageUrl} alt={cp.title} loading="lazy" />
+              <span className="feed-index">{String(i + 1).padStart(2, '0')}</span>
+            </div>
+            <div className="feed-caption">
+              <p className="feed-title">{cp.title}</p>
+              <p className="feed-desc">{cp.description}</p>
             </div>
           </div>
         ))}
@@ -62,41 +70,61 @@ function RouteSection({ route }: { route: RouteStatus }) {
 
 export default async function Page() {
   const state = await getState();
+  const hasData = Boolean(state.primary);
 
   return (
-    <main style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
-      <h1 style={{ fontSize: 24, marginBottom: 4 }}>Commute Copilot</h1>
-      <p style={{ color: '#666', marginTop: 0 }}>
-        {HOME} &rarr; {WORK} &middot; usual leave {USUAL_LEAVE_TIME} AM
+    <main className="shell">
+      <div className="hudbar">
+        <div className="hudbar-title">
+          <span className="live-dot" aria-hidden="true" />
+          COMMUTE WATCH
+        </div>
+        <div className="hudbar-route">
+          MARYSVILLE &rarr; BELLEVUE &middot; USUAL LEAVE {USUAL_LEAVE_TIME} PT
+        </div>
+      </div>
+
+      <h1 className="wordmark">Commute Watch</h1>
+      <p className="subline">
+        {HOME} &rarr; {WORK}
       </p>
 
-      {state.recommendation && (
-        <div
-          style={{
-            background: '#eef2ff',
-            border: '1px solid #c7d2fe',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 24,
-          }}
-        >
-          <strong>Latest:</strong> {state.recommendation}
-          {state.primary?.updatedAt && (
-            <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-              Updated{' '}
-              {new Date(state.primary.updatedAt).toLocaleString('en-US', {
+      {hasData && state.primary ? (
+        <div className="verdict">
+          <div className="verdict-eyebrow">Current call</div>
+          <h2 className={`verdict-headline tone-${toneForScore(state.primary.delaySeverityScore)}`}>
+            {headlineForScore(state.primary.delaySeverityScore)}
+          </h2>
+          {state.recommendation && <p className="verdict-detail">{state.recommendation}</p>}
+          <div className="verdict-meta">
+            LAST SWEEP{' '}
+            {new Date(state.primary.updatedAt)
+              .toLocaleString('en-US', {
                 timeZone: 'America/Los_Angeles',
-              })}{' '}
-              PT
-            </div>
-          )}
+                hour: '2-digit',
+                minute: '2-digit',
+                month: 'short',
+                day: 'numeric',
+              })
+              .toUpperCase()}{' '}
+            PT
+          </div>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <strong>AWAITING FIRST SWEEP</strong>
+          The scheduled morning check hasn&apos;t run yet. Checks fire every 10 minutes,
+          weekday mornings — come back around 6:00 AM Pacific, or trigger one manually.
         </div>
       )}
 
-      {state.primary && <RouteSection route={state.primary} />}
-      {state.alternate && <RouteSection route={state.alternate} />}
+      {state.primary && <RouteSection route={state.primary} index={1} />}
+      {state.alternate && <RouteSection route={state.alternate} index={2} />}
 
-      {!state.primary && <p>No data yet — waiting for the first scheduled check.</p>}
+      <div className="foot">
+        Live stills served directly from images.wsdot.wa.gov &middot; congestion calls from
+        typesafe-ai/jev via Vercel AI Gateway
+      </div>
     </main>
   );
 }
