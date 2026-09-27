@@ -3,9 +3,12 @@ import { Redis } from '@upstash/redis';
 const kv = Redis.fromEnv();
 
 export type CheckpointResult = {
+  id: number;
   title: string;
   imageUrl: string;
   description: string;
+  lat: number;
+  lon: number;
 };
 
 export type RouteStatus = {

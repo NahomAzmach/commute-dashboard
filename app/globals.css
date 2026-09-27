@@ -122,6 +122,14 @@ a {
   color: var(--text-dim);
 }
 
+.title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 h1.wordmark {
   font-family: var(--font-display);
   font-size: 28px;
@@ -404,6 +412,94 @@ h1.wordmark {
   font-family: var(--font-display);
   font-size: 18px;
   margin-bottom: 8px;
+}
+
+/* ---------- refresh button ---------- */
+
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--line);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.refresh-btn:hover {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+
+.refresh-icon {
+  display: inline-block;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.refresh-icon.spin-once {
+  animation: spin 0.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-icon.spin-once {
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- map ---------- */
+
+.map-section {
+  margin-bottom: 36px;
+}
+
+.route-map {
+  height: 360px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-panel);
+}
+
+.route-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
+}
+
+.route-map-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+  letter-spacing: 0.1em;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--bg-panel-raised);
+  color: var(--text-primary);
+  border: 1px solid var(--line);
+}
+
+.leaflet-popup-tip {
+  background: var(--bg-panel-raised);
 }
 
 /* ---------- footer ---------- */

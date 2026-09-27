@@ -1,6 +1,9 @@
 import { getState } from '../lib/store';
-import { HOME, WORK, USUAL_LEAVE_TIME } from '../lib/checkpoints';
+import { HOME, WORK, USUAL_LEAVE_TIME, HOME_COORDS, WORK_COORDS, ROUTES } from '../lib/checkpoints';
 import type { RouteStatus } from '../lib/store';
+import RouteMapLoader from '../components/RouteMapLoader';
+import RefreshFeedButton from '../components/RefreshFeedButton';
+import type { MapRoute } from '../components/RouteMap';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +57,7 @@ function RouteSection({ route, index }: { route: RouteStatus; index: number }) {
           <div className="feed-tile" key={cp.title}>
             <div className="feed-frame">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={cp.imageUrl} alt={cp.title} loading="lazy" />
+              <img src={cp.imageUrl} data-live-src={cp.imageUrl} alt={cp.title} loading="lazy" />
               <span className="feed-index">{String(i + 1).padStart(2, '0')}</span>
             </div>
             <div className="feed-caption">
@@ -68,9 +71,42 @@ function RouteSection({ route, index }: { route: RouteStatus; index: number }) {
   );
 }
 
+function buildMapRoutes(state: Awaited<ReturnType<typeof getState>>): MapRoute[] {
+  if (state.primary && state.alternate) {
+    return [state.primary, state.alternate].map((route) => ({
+      key: route.routeKey,
+      label: route.label,
+      tone: toneForScore(route.delaySeverityScore),
+      checkpoints: route.checkpoints.map((cp) => ({
+        id: cp.id,
+        title: cp.title,
+        lat: cp.lat,
+        lon: cp.lon,
+        imageUrl: cp.imageUrl,
+        description: cp.description,
+      })),
+    }));
+  }
+  // No check has run yet - plot the static route config so the map still
+  // shows something meaningful, just without live descriptions or tone.
+  return ROUTES.map((route) => ({
+    key: route.key,
+    label: route.label,
+    tone: 'unknown' as const,
+    checkpoints: route.checkpoints.map((cp) => ({
+      id: cp.id,
+      title: cp.title,
+      lat: cp.lat,
+      lon: cp.lon,
+      imageUrl: cp.imageUrl,
+    })),
+  }));
+}
+
 export default async function Page() {
   const state = await getState();
   const hasData = Boolean(state.primary);
+  const mapRoutes = buildMapRoutes(state);
 
   return (
     <main className="shell">
@@ -84,10 +120,15 @@ export default async function Page() {
         </div>
       </div>
 
-      <h1 className="wordmark">Commute Watch</h1>
-      <p className="subline">
-        {HOME} &rarr; {WORK}
-      </p>
+      <div className="title-row">
+        <div>
+          <h1 className="wordmark">Commute Watch</h1>
+          <p className="subline">
+            {HOME} &rarr; {WORK}
+          </p>
+        </div>
+        <RefreshFeedButton />
+      </div>
 
       {hasData && state.primary ? (
         <div className="verdict">
@@ -117,6 +158,10 @@ export default async function Page() {
           weekday mornings — come back around 6:00 AM Pacific, or trigger one manually.
         </div>
       )}
+
+      <section className="map-section">
+        <RouteMapLoader routes={mapRoutes} home={HOME_COORDS} work={WORK_COORDS} />
+      </section>
 
       {state.primary && <RouteSection route={state.primary} index={1} />}
       {state.alternate && <RouteSection route={state.alternate} index={2} />}

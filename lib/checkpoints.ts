@@ -16,6 +16,11 @@ export const HOME = '6709 45th Pl NE, Marysville, WA';
 export const WORK = '777 108th Ave NE, Bellevue, WA (Symetra)';
 export const USUAL_LEAVE_TIME = '06:30';
 
+// Approximate - anchored to the nearest checkpoint camera rather than a
+// separate geocode, since that's already the closest real position we track.
+export const HOME_COORDS = { lat: 48.051817, lon: -122.184422 };
+export const WORK_COORDS = { lat: 47.617487, lon: -122.188531 };
+
 export const ROUTES: Route[] = [
   {
     key: 'primary',

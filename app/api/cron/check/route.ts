@@ -28,8 +28,11 @@ async function describeWithRetry(imageUrl: string): Promise<string> {
 async function checkRoute(route: (typeof ROUTES)[number]): Promise<RouteStatus> {
   const checkpoints = await Promise.all(
     route.checkpoints.map(async (cp) => ({
+      id: cp.id,
       title: cp.title,
       imageUrl: cp.imageUrl,
+      lat: cp.lat,
+      lon: cp.lon,
       description: await describeWithRetry(cp.imageUrl),
     })),
   );
