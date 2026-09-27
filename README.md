@@ -6,37 +6,63 @@ along two routes, describes them with a vision model, runs the description
 through TypeSafe's JEV classifier (via Vercel AI Gateway) for a calibrated
 congestion score, and pushes a phone notification when things get worse.
 
-## One-time setup after importing this repo into Vercel
+Scheduling runs on GitHub Actions, not Vercel Cron — Vercel's Hobby plan
+caps cron jobs at once/day (and will refuse to deploy a project whose
+`vercel.json` declares a tighter schedule), so the check endpoint is just a
+plain authenticated API route that anything can call on a schedule.
 
-1. **Storage → Marketplace Database Providers → Upstash → Redis** in the
-   Vercel dashboard (Vercel KV is deprecated; Upstash Redis is the current
-   replacement), and connect it to this project. This adds
-   `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` automatically — no
-   manual entry needed.
+## One-time setup
+
+### 1. Deploy to Vercel
+
+Import this repo into Vercel (Add New → Project). It should deploy cleanly
+now that there's no `vercel.json` cron declaration.
+
+1. **Storage → Marketplace Database Providers → Upstash → Redis**, connect
+   it to this project. Adds `UPSTASH_REDIS_REST_URL` /
+   `UPSTASH_REDIS_REST_TOKEN` automatically.
 2. **Settings → Environment Variables**, add:
    - `AI_GATEWAY_API_KEY` — from Settings → AI Gateway → API Keys.
-   - `NTFY_TOPIC` — make up a unique, hard-to-guess string (e.g.
-     `commute-9f3a1c-marysville`). This is not a secret channel, just an
-     obscure name so nobody else can guess your topic.
+   - `NTFY_TOPIC` — a unique, hard-to-guess string (e.g.
+     `commute-9f3a1c-marysville`). Not a real secret, just obscure enough
+     that nobody else guesses your topic.
    - `CRON_SECRET` — any random string, protects the check endpoint from
      random public hits.
-3. Install the **ntfy** app (iOS/Android) and subscribe to the same topic
-   name you used for `NTFY_TOPIC`.
-4. Redeploy once after adding the env vars so the cron function picks them
-   up.
+3. Redeploy once after adding the env vars.
+4. Note the production URL Vercel gives you (Project → Deployments, or the
+   domain shown on the project overview).
 
-The dashboard itself is public at your Vercel URL (`/`) — no login. Camera
-images are embedded directly from `images.wsdot.wa.gov`, so they're always
-live regardless of when the last check ran; the description/severity text
-below each image reflects the last scheduled check.
+### 2. Wire up the schedule (GitHub Actions)
 
-## Schedule
+The workflow at `.github/workflows/commute-check.yml` is already in this
+repo. It just needs two repository secrets:
 
-`vercel.json` runs the check every 10 minutes across two UTC hours
-(13:00–14:59, i.e. 6:00–7:50 AM Pacific), weekdays only. **Vercel's Hobby
-plan may restrict cron frequency to once/day** — if the 10-minute cadence
-doesn't fire as configured, either upgrade to Pro or reduce this to a
-single daily invocation.
+```
+gh secret set DASHBOARD_URL --body "https://<your-vercel-domain>"
+gh secret set CRON_SECRET --body "<the same value you set in Vercel>"
+```
+
+(Or add them via GitHub → repo → Settings → Secrets and variables →
+Actions, if you'd rather use the web UI.)
+
+It fires every 10 minutes, 6:00–7:50 AM Pacific, weekdays only. You can
+also trigger it on demand from the Actions tab ("Run workflow") or with:
+
+```
+gh workflow run commute-check.yml
+```
+
+### 3. Get notified
+
+Install the **ntfy** app (iOS/Android) and subscribe to the topic name you
+used for `NTFY_TOPIC`.
+
+## The dashboard
+
+Public at your Vercel URL (`/`) — no login. Camera images are embedded
+directly from `images.wsdot.wa.gov`, so they're always live regardless of
+when the last check ran; the description/severity text below each image
+reflects the last scheduled check.
 
 ## Manually triggering a check
 

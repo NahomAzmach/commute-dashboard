@@ -1,0 +1,19 @@
+name: Commute check
+
+on:
+  schedule:
+    # Every 10 minutes, 13:00-14:59 UTC (6:00-7:50 AM Pacific), weekdays only.
+    - cron: '*/10 13,14 * * 1-5'
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger commute check endpoint
+        env:
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -sf "$DASHBOARD_URL/api/cron/check?secret=$CRON_SECRET" -o response.json -w "\nstatus: %{http_code}\n"
+          cat response.json
