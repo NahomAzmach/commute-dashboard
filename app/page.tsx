@@ -117,7 +117,7 @@ export default async function Page() {
 
       <div className="foot">
         Live stills served directly from images.wsdot.wa.gov &middot; congestion calls from
-        typesafe-ai/jev via Vercel AI Gateway
+        Gemini 2.5 Flash-Lite via Vercel AI Gateway
       </div>
     </main>
   );
