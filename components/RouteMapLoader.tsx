@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import type { MapRoute } from './RouteMap';
+import type { MapRoute, MapPin } from './RouteMap';
 
 const RouteMap = dynamic(() => import('./RouteMap'), {
   ssr: false,
@@ -10,8 +10,8 @@ const RouteMap = dynamic(() => import('./RouteMap'), {
 
 export default function RouteMapLoader(props: {
   routes: MapRoute[];
-  home: { lat: number; lon: number };
-  work: { lat: number; lon: number };
+  pins?: MapPin[];
+  routeLine?: [number, number][];
 }) {
   return <RouteMap {...props} />;
 }

@@ -1,75 +1,14 @@
 import { getState } from '../lib/store';
 import { HOME, WORK, USUAL_LEAVE_TIME, HOME_COORDS, WORK_COORDS, ROUTES } from '../lib/checkpoints';
-import type { RouteStatus } from '../lib/store';
+import { toneForScore } from '../lib/severity';
 import RouteMapLoader from '../components/RouteMapLoader';
 import RefreshFeedButton from '../components/RefreshFeedButton';
+import VerdictPanel from '../components/VerdictPanel';
+import FeedGrid from '../components/FeedGrid';
 import type { MapRoute } from '../components/RouteMap';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
-
-type Tone = 'good' | 'warn' | 'bad';
-
-function toneForScore(score: number): Tone {
-  if (score < 1) return 'good';
-  if (score < 3) return 'warn';
-  return 'bad';
-}
-
-function headlineForScore(score: number): string {
-  if (score < 1) return 'GO NOW — ROUTE CLEAR';
-  if (score < 2) return 'MINOR DELAYS';
-  if (score < 3) return 'HEAVY TRAFFIC BUILDING';
-  return 'SEVERE — HOLD OR REROUTE';
-}
-
-function SeverityMeter({ score, label }: { score: number; label: string }) {
-  const idx = Math.round(Math.min(3, Math.max(0, score)));
-  const tone = toneForScore(score);
-  const litClass = tone === 'good' ? 'lit-good' : tone === 'warn' ? 'lit-warn' : 'lit-bad';
-  return (
-    <>
-      <span className="severity-label">{label}</span>
-      <span className="severity-meter" aria-hidden="true">
-        {[0, 1, 2, 3].map((bar) => (
-          <span key={bar} className={`severity-bar${bar <= idx ? ` ${litClass}` : ''}`} />
-        ))}
-      </span>
-    </>
-  );
-}
-
-const SEVERITY_WORDS = ['CLEAR', 'LIGHT', 'MODERATE', 'SEVERE'];
-
-function severityWord(score: number) {
-  return SEVERITY_WORDS[Math.round(Math.min(3, Math.max(0, score)))];
-}
-
-function RouteSection({ route, index }: { route: RouteStatus; index: number }) {
-  return (
-    <section className="route-section">
-      <div className="route-heading">
-        <span className="route-index">{String(index).padStart(2, '0')}</span>
-        <h2 className="route-name">{route.label}</h2>
-        <SeverityMeter score={route.delaySeverityScore} label={severityWord(route.delaySeverityScore)} />
-      </div>
-      <div className="feed-grid">
-        {route.checkpoints.map((cp, i) => (
-          <div className="feed-tile" key={cp.title}>
-            <div className="feed-frame">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={cp.imageUrl} data-live-src={cp.imageUrl} alt={cp.title} loading="lazy" />
-              <span className="feed-index">{String(i + 1).padStart(2, '0')}</span>
-            </div>
-            <div className="feed-caption">
-              <p className="feed-title">{cp.title}</p>
-              <p className="feed-desc">{cp.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 function buildMapRoutes(state: Awaited<ReturnType<typeof getState>>): MapRoute[] {
   if (state.primary && state.alternate) {
@@ -115,9 +54,14 @@ export default async function Page() {
           <span className="live-dot" aria-hidden="true" />
           COMMUTE WATCH
         </div>
-        <div className="hudbar-route">
-          MARYSVILLE &rarr; BELLEVUE &middot; USUAL LEAVE {USUAL_LEAVE_TIME} PT
-        </div>
+        <nav className="hudbar-nav">
+          <Link href="/" className="hudbar-navlink active">
+            MY COMMUTE
+          </Link>
+          <Link href="/explore" className="hudbar-navlink">
+            EXPLORE A ROUTE
+          </Link>
+        </nav>
       </div>
 
       <div className="title-row">
@@ -131,26 +75,11 @@ export default async function Page() {
       </div>
 
       {hasData && state.primary ? (
-        <div className="verdict">
-          <div className="verdict-eyebrow">Current call</div>
-          <h2 className={`verdict-headline tone-${toneForScore(state.primary.delaySeverityScore)}`}>
-            {headlineForScore(state.primary.delaySeverityScore)}
-          </h2>
-          {state.recommendation && <p className="verdict-detail">{state.recommendation}</p>}
-          <div className="verdict-meta">
-            LAST SWEEP{' '}
-            {new Date(state.primary.updatedAt)
-              .toLocaleString('en-US', {
-                timeZone: 'America/Los_Angeles',
-                hour: '2-digit',
-                minute: '2-digit',
-                month: 'short',
-                day: 'numeric',
-              })
-              .toUpperCase()}{' '}
-            PT
-          </div>
-        </div>
+        <VerdictPanel
+          score={state.primary.delaySeverityScore}
+          detail={state.recommendation}
+          updatedAtISO={state.primary.updatedAt}
+        />
       ) : (
         <div className="empty-state">
           <strong>AWAITING FIRST SWEEP</strong>
@@ -160,11 +89,31 @@ export default async function Page() {
       )}
 
       <section className="map-section">
-        <RouteMapLoader routes={mapRoutes} home={HOME_COORDS} work={WORK_COORDS} />
+        <RouteMapLoader
+          routes={mapRoutes}
+          pins={[
+            { ...HOME_COORDS, label: 'H', title: 'Home' },
+            { ...WORK_COORDS, label: 'W', title: 'Work' },
+          ]}
+        />
       </section>
 
-      {state.primary && <RouteSection route={state.primary} index={1} />}
-      {state.alternate && <RouteSection route={state.alternate} index={2} />}
+      {state.primary && (
+        <FeedGrid
+          label={state.primary.label}
+          index={1}
+          score={state.primary.delaySeverityScore}
+          checkpoints={state.primary.checkpoints}
+        />
+      )}
+      {state.alternate && (
+        <FeedGrid
+          label={state.alternate.label}
+          index={2}
+          score={state.alternate.delaySeverityScore}
+          checkpoints={state.alternate.checkpoints}
+        />
+      )}
 
       <div className="foot">
         Live stills served directly from images.wsdot.wa.gov &middot; congestion calls from

@@ -1,54 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ROUTES } from '../../../../lib/checkpoints';
-import { describeImage, classifyRoute } from '../../../../lib/ai';
+import { runLiveCheck } from '../../../../lib/liveCheck';
 import { sendPush } from '../../../../lib/notify';
-import {
-  getLastPrimaryScore,
-  setLastPrimaryScore,
-  getState,
-  setState,
-  type RouteStatus,
-} from '../../../../lib/store';
+import { getLastPrimaryScore, setLastPrimaryScore, getState, setState } from '../../../../lib/store';
 
 export const maxDuration = 60;
-
-async function describeWithRetry(imageUrl: string): Promise<string> {
-  try {
-    return await describeImage(imageUrl);
-  } catch (firstError) {
-    try {
-      return await describeImage(imageUrl);
-    } catch (secondError) {
-      const msg = secondError instanceof Error ? secondError.message : String(secondError);
-      return `could not read camera frame (${msg.slice(0, 120)})`;
-    }
-  }
-}
-
-async function checkRoute(route: (typeof ROUTES)[number]): Promise<RouteStatus> {
-  const checkpoints = await Promise.all(
-    route.checkpoints.map(async (cp) => ({
-      id: cp.id,
-      title: cp.title,
-      imageUrl: cp.imageUrl,
-      lat: cp.lat,
-      lon: cp.lon,
-      description: await describeWithRetry(cp.imageUrl),
-    })),
-  );
-  const state = checkpoints
-    .map((c, i) => `${i + 1}. ${c.title}: ${c.description}`)
-    .join('\n');
-  const verdict = await classifyRoute(state);
-  return {
-    routeKey: route.key,
-    label: route.label,
-    heavyTrafficProbability: verdict.heavyTrafficProbability,
-    delaySeverityScore: verdict.delaySeverityScore,
-    checkpoints,
-    updatedAt: new Date().toISOString(),
-  };
-}
 
 function todayPacificDateString() {
   return new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
@@ -71,8 +27,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const [primary, alternate] = await Promise.all([
-      checkRoute(ROUTES[0]),
-      checkRoute(ROUTES[1]),
+      runLiveCheck(ROUTES[0].key, ROUTES[0].label, ROUTES[0].checkpoints),
+      runLiveCheck(ROUTES[1].key, ROUTES[1].label, ROUTES[1].checkpoints),
     ]);
 
     const prevState = await getState();

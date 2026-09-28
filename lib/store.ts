@@ -12,7 +12,7 @@ export type CheckpointResult = {
 };
 
 export type RouteStatus = {
-  routeKey: 'primary' | 'alternate';
+  routeKey: string;
   label: string;
   heavyTrafficProbability: number;
   delaySeverityScore: number;
