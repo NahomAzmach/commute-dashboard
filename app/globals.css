@@ -108,6 +108,31 @@ a {
   }
 }
 
+.hudbar-nav {
+  display: flex;
+  gap: 18px;
+}
+
+.hudbar-navlink {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  text-decoration: none;
+  padding-bottom: 3px;
+  border-bottom: 2px solid transparent;
+}
+
+.hudbar-navlink:hover {
+  color: var(--text-dim);
+}
+
+.hudbar-navlink.active {
+  color: var(--amber);
+  border-bottom-color: var(--amber);
+}
+
 .hudbar-route {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -412,6 +437,84 @@ h1.wordmark {
   font-family: var(--font-display);
   font-size: 18px;
   margin-bottom: 8px;
+}
+
+/* ---------- explore form ---------- */
+
+.explore-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.explore-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 180px;
+}
+
+.explore-field label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.explore-field input {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 4px;
+}
+
+.explore-field input:focus {
+  border-color: var(--amber-dim);
+}
+
+.explore-field input::placeholder {
+  color: var(--text-faint);
+}
+
+.explore-submit {
+  background: var(--amber-dim);
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 11px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.explore-submit:hover:not(:disabled) {
+  background: var(--amber);
+  color: #0a0f1c;
+}
+
+.explore-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.explore-error {
+  border: 1px solid var(--red-dim);
+  background: rgba(229, 72, 77, 0.08);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 14px 16px;
+  font-size: 13px;
+  margin-bottom: 24px;
 }
 
 /* ---------- refresh button ---------- */

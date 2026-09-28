@@ -20,6 +20,13 @@ export type MapRoute = {
   checkpoints: MapCheckpoint[];
 };
 
+export type MapPin = {
+  lat: number;
+  lon: number;
+  label: string;
+  title?: string;
+};
+
 const TONE_COLOR: Record<MapRoute['tone'], string> = {
   good: '#4fd1ae',
   warn: '#e8a33d',
@@ -29,12 +36,12 @@ const TONE_COLOR: Record<MapRoute['tone'], string> = {
 
 export default function RouteMap({
   routes,
-  home,
-  work,
+  pins = [],
+  routeLine,
 }: {
   routes: MapRoute[];
-  home: { lat: number; lon: number };
-  work: { lat: number; lon: number };
+  pins?: MapPin[];
+  routeLine?: [number, number][];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -56,10 +63,15 @@ export default function RouteMap({
       maxZoom: 19,
     }).addTo(map);
 
-    const bounds: L.LatLngExpression[] = [[home.lat, home.lon], [work.lat, work.lon]];
+    const bounds: L.LatLngExpression[] = pins.map((p) => [p.lat, p.lon]);
+
+    if (routeLine && routeLine.length > 1) {
+      L.polyline(routeLine, { color: '#e8a33d', weight: 3, opacity: 0.75 }).addTo(map);
+      bounds.push(...routeLine);
+    }
 
     // De-dupe checkpoints shared between routes (most I-405 segments appear
-    // on both), keeping the first (primary) route's tone when shared.
+    // on both), keeping the first route's tone when shared.
     const seen = new Set<number>();
     for (const route of routes) {
       const color = TONE_COLOR[route.tone];
@@ -87,27 +99,31 @@ export default function RouteMap({
       }
     }
 
-    const homeIcon = L.divIcon({
-      className: '',
-      html: `<span style="display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#141c2e;border:2px solid #e8a33d;color:#e8a33d;font:600 10px var(--font-mono, monospace);">H</span>`,
-      iconSize: [18, 18],
-      iconAnchor: [9, 9],
-    });
-    const workIcon = L.divIcon({
-      className: '',
-      html: `<span style="display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#141c2e;border:2px solid #e8a33d;color:#e8a33d;font:600 10px var(--font-mono, monospace);">W</span>`,
-      iconSize: [18, 18],
-      iconAnchor: [9, 9],
-    });
-    L.marker([home.lat, home.lon], { icon: homeIcon }).addTo(map).bindPopup('Home');
-    L.marker([work.lat, work.lon], { icon: workIcon }).addTo(map).bindPopup('Work');
+    for (const pin of pins) {
+      const icon = L.divIcon({
+        className: '',
+        html: `<span style="display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#141c2e;border:2px solid #e8a33d;color:#e8a33d;font:600 10px var(--font-mono, monospace);">${escapeHtml(pin.label)}</span>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+      L.marker([pin.lat, pin.lon], { icon })
+        .addTo(map)
+        .bindPopup(escapeHtml(pin.title ?? pin.label));
+    }
 
-    map.fitBounds(L.latLngBounds(bounds), { padding: [24, 24] });
+    if (bounds.length) {
+      map.fitBounds(L.latLngBounds(bounds), { padding: [24, 24] });
+    } else {
+      map.setView([47.5, -120.5], 7);
+    }
 
     return () => {
       map.remove();
       mapRef.current = null;
     };
+    // Intentionally mount-only: the parent remounts this component (via a
+    // changing `key`) whenever the data set genuinely changes, rather than
+    // diffing Leaflet layers in place.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
