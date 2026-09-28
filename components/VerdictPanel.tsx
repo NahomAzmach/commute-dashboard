@@ -1,18 +1,20 @@
-import { toneForScore, headlineForScore } from '../lib/severity';
+import { toneForScore } from '../lib/severity';
 
 export default function VerdictPanel({
   score,
+  headline,
   detail,
   updatedAtISO,
 }: {
   score: number;
+  headline: string;
   detail?: string;
   updatedAtISO: string;
 }) {
   return (
     <div className="verdict">
       <div className="verdict-eyebrow">Current call</div>
-      <h2 className={`verdict-headline tone-${toneForScore(score)}`}>{headlineForScore(score)}</h2>
+      <h2 className={`verdict-headline tone-${toneForScore(score)}`}>{headline}</h2>
       {detail && <p className="verdict-detail">{detail}</p>}
       <div className="verdict-meta">
         LAST SWEEP{' '}

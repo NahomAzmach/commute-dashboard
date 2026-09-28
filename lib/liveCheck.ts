@@ -1,4 +1,5 @@
 import { assessRoute } from './ai';
+import { summarizeConditions } from './severity';
 import type { RouteStatus } from './store';
 
 export type GenericCheckpoint = {
@@ -28,6 +29,7 @@ export async function runLiveCheck(
     lat: cp.lat,
     lon: cp.lon,
     description: assessment.perCheckpoint[i] ?? 'Could not load this camera frame.',
+    condition: assessment.perCheckpointCondition[i],
   }));
 
   return {
@@ -35,6 +37,7 @@ export async function runLiveCheck(
     label,
     heavyTrafficProbability: assessment.heavyTrafficProbability,
     delaySeverityScore: assessment.delaySeverityScore,
+    summary: summarizeConditions(results),
     checkpoints: results,
     updatedAt: new Date().toISOString(),
   };
