@@ -17,53 +17,96 @@ async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   }
 }
 
+const CONDITIONS = ['clear', 'slow', 'congested', 'stopped', 'unreadable'] as const;
+type Condition = (typeof CONDITIONS)[number];
+
 const AssessmentSchema = z.object({
-  checkpointDescriptions: z
-    .array(z.string())
-    .describe(
-      'One entry per checkpoint image, in the exact same order they were given. Each ' +
-        'description must state only what is concretely visible: vehicle spacing and ' +
-        'density, presence of brake lights or headlight clusters, any stopped vehicles, ' +
-        'lane blockages, weather or visibility conditions. If an image is too dark, blank, ' +
-        'or otherwise too ambiguous to assess, say exactly that instead of guessing.',
-    ),
+  checkpoints: z
+    .array(
+      z.object({
+        description: z
+          .string()
+          .describe(
+            'One concrete sentence stating only what is visible: vehicle spacing and ' +
+              'density, brake-light or headlight patterns, any stopped vehicles, lane ' +
+              'blockages, weather or visibility conditions.',
+          ),
+        condition: z
+          .enum(CONDITIONS)
+          .describe(
+            'Pick exactly one, based only on the image: "clear" = free-flowing, normal ' +
+              'speed and spacing. "slow" = minor slowdown, still moving. "congested" = ' +
+              'dense traffic with visible brake lights and clearly reduced speed. ' +
+              '"stopped" = vehicles stopped or crawling at a near-stop. "unreadable" = the ' +
+              'image genuinely shows nothing usable - not just because it is nighttime or ' +
+              'imperfectly lit. Night images with visible headlight/taillight patterns, ' +
+              'motion blur, or spacing are readable; only use "unreadable" when none of ' +
+              'that is discernible at all.',
+          ),
+      }),
+    )
+    .describe('One entry per checkpoint image, in the exact same order they were given.'),
   reasoning: z
     .string()
     .describe(
-      'Brief step-by-step reasoning across all checkpoints, written before you decide the ' +
-        'scores below: which checkpoints show concrete evidence of congestion, which are ' +
-        'ambiguous or unreadable, and how that adds up to an overall picture of the route.',
-    ),
-  delaySeverityScore: z
-    .number()
-    .min(0)
-    .max(3)
-    .describe(
-      'Overall delay severity for the whole route, grounded in the visual evidence above. ' +
-        '0 = free-flowing traffic with clear visual evidence at every readable checkpoint. ' +
-        '1 = minor slowdowns visible at one or two checkpoints, otherwise clear. ' +
-        '2 = clear congestion (dense traffic, visible brake lights, reduced speed) at one or ' +
-        'more checkpoints. 3 = stopped or near-stopped traffic at multiple checkpoints. ' +
-        'Unreadable/ambiguous checkpoints should not by themselves push the score up or down.',
-    ),
-  heavyTrafficProbability: z
-    .number()
-    .min(0)
-    .max(1)
-    .describe(
-      'Probability that there is heavy or stopped traffic somewhere on this route right ' +
-        'now, based only on the visual evidence actually described above.',
+      'Brief note on anything ambiguous across the checkpoints and how you resolved it.',
     ),
 });
 
 export type RouteAssessment = z.infer<typeof AssessmentSchema>;
 
 /**
+ * The route-level score and probability are computed deterministically from
+ * the model's per-checkpoint condition labels, rather than asking the model
+ * to freely judge an aggregate score itself. A discrete 5-way classification
+ * per image is a far more repeatable task for a small model than a holistic
+ * continuous judgment across 8 images at once - in testing, the latter
+ * swung meaningfully (e.g. 1 vs 2 out of 3) on identical images seconds
+ * apart, even at temperature 0.
+ */
+const CONDITION_VALUE: Record<Condition, number | null> = {
+  clear: 0,
+  slow: 1,
+  congested: 2,
+  stopped: 3,
+  unreadable: null,
+};
+
+/**
+ * Combines two independent classification samples per checkpoint by
+ * averaging their numeric condition values, then derives a route score from
+ * those averaged, smoother per-checkpoint values - a single sample flipping
+ * one category (e.g. "congested" vs "stopped") now moves the result by a
+ * fraction of a point instead of swinging the whole route's score.
+ */
+function computeSeverity(perCheckpointAverages: (number | null)[]): {
+  score: number;
+  probability: number;
+} {
+  const readable = perCheckpointAverages.filter((v): v is number => v !== null);
+  if (readable.length === 0) return { score: 0, probability: 0 };
+
+  const maxVal = Math.max(...readable);
+  const elevatedCount = readable.filter((v) => v >= 1.5).length;
+
+  // Severity tracks the single worst point on the route; two or more
+  // elevated points push it further toward the top of the scale.
+  let score = maxVal;
+  if (elevatedCount >= 2) score = Math.min(3, score + 0.5);
+  score = Math.max(0, Math.min(3, score));
+
+  const avg = readable.reduce((a, b) => a + b, 0) / readable.length;
+  const probability = Math.min(1, avg / 3 + (elevatedCount >= 2 ? 0.15 : 0));
+
+  return { score, probability };
+}
+
+/**
  * Single combined call: every checkpoint image for a route goes to one
  * vision-capable model in one request, which reads all of them together and
- * returns a structured, reasoned verdict. Replaces the old per-image
- * description pass followed by a separate JEV classification call - one
- * model, one call, no second opinion needed.
+ * classifies each. Replaces the old per-image description pass followed by
+ * a separate JEV classification call - one model, one call, no second
+ * opinion needed, and no free-form aggregate score to be inconsistent.
  */
 export async function assessRoute(
   checkpoints: { title: string; imageUrl: string }[],
@@ -101,8 +144,14 @@ export async function assessRoute(
         'stills along one driving route, in order from the start of the drive to the end. ' +
         'For each image below, you will see its checkpoint label immediately before it. ' +
         'Only describe what is concretely visible - do not assume conditions from the time ' +
-        'of day or camera name. Many of these are nighttime images; say so and describe ' +
-        'what can still be seen rather than treating darkness itself as a traffic signal.',
+        'of day or camera name.\n\n' +
+        'Many of these are nighttime images. A dark image is not automatically unreadable: ' +
+        'headlight and taillight patterns, brake-light clusters, motion blur (streaks mean ' +
+        'a vehicle is moving at speed; sharp, static lights mean it is stopped or crawling), ' +
+        'and relative spacing between light clusters are all still visible at night and are ' +
+        'real evidence you should use. Only classify an image as unreadable if none of that ' +
+        'is discernible at all - do not default to that answer just because it is nighttime ' +
+        'or the lighting is imperfect.',
     },
   ];
   readable.forEach(({ cp }, i) => {
@@ -111,31 +160,39 @@ export async function assessRoute(
   });
   content.push({
     type: 'text',
-    text: 'Now provide checkpointDescriptions (one per image above, same order), your reasoning, and the two overall route scores.',
+    text: 'Now classify each checkpoint above (same order) and give your reasoning.',
   });
 
+  // One call, all images together. Verified against frozen (fixed-byte)
+  // test images that temperature 0 gives byte-identical classifications
+  // across repeat calls - the run-to-run swings seen earlier were real
+  // WSDOT camera images changing between test iterations, not model noise,
+  // so there is nothing here for a multi-sample ensemble to cancel out.
   const result = await generateObject({
     model: MODEL,
     schema: AssessmentSchema,
     messages: [{ role: 'user', content }],
+    temperature: 0,
   });
 
-  // Splice the model's per-image descriptions back into the original
-  // checkpoint order, leaving a null for any checkpoint whose image never
-  // loaded in the first place.
   const perCheckpoint: (string | null)[] = checkpoints.map(() => null);
+  const perCheckpointValues: (number | null)[] = [];
   let readableIdx = 0;
   fetched.forEach((f, i) => {
     if (f.bytes !== null) {
-      perCheckpoint[i] = result.object.checkpointDescriptions[readableIdx] ?? null;
+      const entry = result.object.checkpoints[readableIdx];
+      perCheckpoint[i] = entry?.description ?? null;
+      perCheckpointValues.push(entry ? CONDITION_VALUE[entry.condition] : null);
       readableIdx += 1;
     }
   });
 
+  const { score, probability } = computeSeverity(perCheckpointValues);
+
   return {
     perCheckpoint,
-    delaySeverityScore: result.object.delaySeverityScore,
-    heavyTrafficProbability: result.object.heavyTrafficProbability,
+    delaySeverityScore: score,
+    heavyTrafficProbability: probability,
     reasoning: result.object.reasoning,
   };
 }
