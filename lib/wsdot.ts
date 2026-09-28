@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 
 const kv = Redis.fromEnv();
-const CACHE_KEY = 'wsdot:catalog';
+const CACHE_KEY = 'wsdot:catalog:v2';
 const CACHE_TTL_SECONDS = 6 * 60 * 60;
 
 export type WsdotCamera = {
@@ -50,6 +50,7 @@ export async function getWsdotCatalog(): Promise<WsdotCamera[]> {
     if (!Number.isFinite(id)) continue;
 
     const title = String(row?.Title || row?.Description || `WSDOT ${id}`);
+    if (isNonMainlineCamera(title)) continue;
     cameras.push({ id, title, lat, lon, imageUrl });
   }
 
@@ -60,4 +61,17 @@ export async function getWsdotCatalog(): Promise<WsdotCamera[]> {
   }
 
   return cameras;
+}
+
+// Ferry terminals, weigh stations, and rest areas show up in the same
+// catalog and sit right next to highways, so geometry matching alone picks
+// them up - but "empty holding lot" or "no queue at a weigh station" reads
+// as very different conditions than actual moving-lane traffic, and gets
+// misread as congestion or dismissed as unreadable rather than reflecting
+// the road itself. Filtered out entirely rather than fed to the model.
+const NON_MAINLINE_KEYWORDS = ['ferry', 'holding', 'weigh station', 'rest area', 'wsf '];
+
+function isNonMainlineCamera(title: string): boolean {
+  const lower = title.toLowerCase();
+  return NON_MAINLINE_KEYWORDS.some((kw) => lower.includes(kw));
 }

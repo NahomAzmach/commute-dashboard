@@ -11,6 +11,7 @@ export type MapCheckpoint = {
   lon: number;
   imageUrl: string;
   description?: string;
+  condition?: string | null;
 };
 
 export type MapRoute = {
@@ -32,6 +33,17 @@ const TONE_COLOR: Record<MapRoute['tone'], string> = {
   warn: '#e8a33d',
   bad: '#e5484d',
   unknown: '#7c8aa5',
+};
+
+// Each dot is colored by that specific checkpoint's own reading, not the
+// route's overall severity - a single congested camera should show as one
+// red dot among seven clear ones, not turn the whole route red.
+const CONDITION_COLOR: Record<string, string> = {
+  clear: '#4fd1ae',
+  slow: '#e8a33d',
+  congested: '#f0803c',
+  stopped: '#e5484d',
+  unreadable: '#7c8aa5',
 };
 
 export default function RouteMap({
@@ -74,11 +86,12 @@ export default function RouteMap({
     // on both), keeping the first route's tone when shared.
     const seen = new Set<number>();
     for (const route of routes) {
-      const color = TONE_COLOR[route.tone];
+      const routeColor = TONE_COLOR[route.tone];
       for (const cp of route.checkpoints) {
         if (seen.has(cp.id)) continue;
         seen.add(cp.id);
         bounds.push([cp.lat, cp.lon]);
+        const color = (cp.condition && CONDITION_COLOR[cp.condition]) || routeColor;
 
         const icon = L.divIcon({
           className: '',

@@ -7,6 +7,7 @@ export type CheckpointResult = {
   title: string;
   imageUrl: string;
   description: string;
+  condition: string | null;
   lat: number;
   lon: number;
 };
@@ -16,6 +17,7 @@ export type RouteStatus = {
   label: string;
   heavyTrafficProbability: number;
   delaySeverityScore: number;
+  summary: string;
   checkpoints: CheckpointResult[];
   updatedAt: string;
 };
