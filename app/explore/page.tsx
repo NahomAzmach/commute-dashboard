@@ -161,8 +161,8 @@ export default function ExplorePage() {
 
       <div className="foot">
         Live stills served directly from images.wsdot.wa.gov &middot; congestion calls from
-        typesafe-ai/jev via Vercel AI Gateway &middot; routing via OSRM &middot; geocoding via
-        OpenStreetMap Nominatim &middot; limited to 5 scans per 10 minutes per visitor
+        Gemini 2.5 Flash-Lite via Vercel AI Gateway &middot; routing via OSRM &middot; geocoding
+        via OpenStreetMap Nominatim &middot; limited to 5 scans per 10 minutes per visitor
       </div>
     </main>
   );
