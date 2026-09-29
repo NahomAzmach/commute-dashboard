@@ -2,6 +2,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { frameSignature, changeScore, edgeDensity } from './visualSignals';
 import { getPreviousSignature, setSignature } from './frameHistory';
+import { countVehicles } from './vehicleDetect';
 import { logExample } from './trainingLog';
 
 const MODEL = 'google/gemini-2.5-flash-lite';
@@ -112,6 +113,7 @@ type PreparedCheckpoint = {
   signature: Buffer;
   change: number | null;
   edgeDensity: number;
+  vehicleCount: number | null;
 };
 
 /**
@@ -134,10 +136,11 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
   const bytes = await fetchImageBytes(cp.imageUrl);
   if (!bytes) return null;
 
-  const [signature, previous, density] = await Promise.all([
+  const [signature, previous, density, vehicleCount] = await Promise.all([
     frameSignature(bytes),
     getPreviousSignature(cp.id),
     edgeDensity(bytes),
+    countVehicles(bytes),
   ]);
   const change = previous ? changeScore(signature, previous) : null;
 
@@ -146,7 +149,7 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
   // this call's own result.
   void setSignature(cp.id, signature);
 
-  return { cp, bytes, signature, change, edgeDensity: density };
+  return { cp, bytes, signature, change, edgeDensity: density, vehicleCount };
 }
 
 /**
@@ -194,8 +197,15 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
         'raise this, so treat a high value as suggestive, not proof, especially right after ' +
         'sunset/sunrise. "no prior frame" means this camera has no recent baseline to compare ' +
         'against - treat that the same as not having this signal at all, not as evidence of ' +
-        'anything.\n\n' +
-        'Use this signal together with what you actually see - do not invent motion cues ' +
+        'anything.\n' +
+        '- "vehicles" (integer, or "n/a"): a real count of cars/trucks/buses/motorcycles ' +
+        'detected in this exact image by a pretrained object-detection model - not a guess, ' +
+        'an actual per-object count. Weigh it alongside what you see, but it can undercount ' +
+        'in heavy fog, rain, glare, or when vehicles are small/distant/partially hidden, so a ' +
+        'low count does not strictly rule out traffic the image itself clearly shows. "n/a" ' +
+        'means detection failed for this frame - treat that the same as not having the signal.' +
+        '\n\n' +
+        'Use these signals together with what you actually see - do not invent motion cues ' +
         '(like "motion blur") that are not real in a single still frame; these are stills, ' +
         'not long exposures. Only describe what is concretely visible.\n\n' +
         'Some cameras are on surface streets, ferry terminals, or intersections rather than ' +
@@ -206,12 +216,13 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
         'either way.',
     },
   ];
-  readable.forEach(({ cp, change }, i) => {
+  readable.forEach(({ cp, change, vehicleCount }, i) => {
     content.push({
       type: 'text',
       text:
         `Checkpoint ${i + 1}: ${cp.title}\n` +
-        `change: ${change !== null ? change.toFixed(2) : 'no prior frame'}`,
+        `change: ${change !== null ? change.toFixed(2) : 'no prior frame'}\n` +
+        `vehicles: ${vehicleCount !== null ? vehicleCount : 'n/a'}`,
     });
     content.push({ type: 'image', image: readable[i].bytes });
   });
@@ -250,6 +261,7 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
           hour: new Date(now).getUTCHours(),
           change: f.change,
           edgeDensity: f.edgeDensity,
+          vehicleCount: f.vehicleCount,
           condition: entry.condition,
         });
       }
