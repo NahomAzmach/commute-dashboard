@@ -36,6 +36,10 @@ export async function GET() {
       cameraIds.add(e.cameraId);
     }
 
+    // TEMPORARY: surfaces the last vehicle-detection error for production
+    // debugging (see lib/vehicleDetect.ts). Remove once diagnosed.
+    const lastVehicleDetectError = await kv.get<string>('debug:vehicleDetect:lastError');
+
     return NextResponse.json({
       totalLogged: total,
       sampledForStats: entries.length,
@@ -48,6 +52,7 @@ export async function GET() {
         min: entries.length ? densityMin : null,
         max: entries.length ? densityMax : null,
       },
+      lastVehicleDetectError,
       newest: entries.slice(0, 5),
     });
   } catch (error) {
