@@ -1,7 +1,8 @@
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import { frameSignature, changeScore } from './visualSignals';
+import { frameSignature, changeScore, edgeDensity } from './visualSignals';
 import { getPreviousSignature, setSignature } from './frameHistory';
+import { logExample } from './trainingLog';
 
 const MODEL = 'google/gemini-2.5-flash-lite';
 
@@ -110,6 +111,7 @@ type PreparedCheckpoint = {
   bytes: Uint8Array;
   signature: Buffer;
   change: number | null;
+  edgeDensity: number;
 };
 
 /**
@@ -119,19 +121,23 @@ type PreparedCheckpoint = {
  * grounded in the actual pixels rather than a model's guess.
  *
  * An edge-density "how busy is this frame" proxy was tried alongside this
- * and dropped after calibration testing: absolute edge energy on real WSDOT
- * stills only spans a narrow range (~23-44 in testing) and is dominated by
- * static background texture (guardrails, trees, lane markings), not
- * vehicles - it doesn't discriminate reliably without a per-camera relative
- * baseline, which is a real follow-up (see lib/visualSignals.ts).
+ * and dropped from the live prompt after calibration testing: absolute edge
+ * energy on real WSDOT stills only spans a narrow range (~23-44 in testing)
+ * and is dominated by static background texture (guardrails, trees, lane
+ * markings), not vehicles - it doesn't discriminate reliably as a
+ * global-threshold signal without a per-camera relative baseline (see
+ * lib/visualSignals.ts). It's still computed here and logged as a training
+ * feature (see lib/trainingLog.ts) - a learned model can weigh it per-camera
+ * in a way a fixed threshold can't.
  */
 async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoint | null> {
   const bytes = await fetchImageBytes(cp.imageUrl);
   if (!bytes) return null;
 
-  const [signature, previous] = await Promise.all([
+  const [signature, previous, density] = await Promise.all([
     frameSignature(bytes),
     getPreviousSignature(cp.id),
+    edgeDensity(bytes),
   ]);
   const change = previous ? changeScore(signature, previous) : null;
 
@@ -140,7 +146,7 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
   // this call's own result.
   void setSignature(cp.id, signature);
 
-  return { cp, bytes, signature, change };
+  return { cp, bytes, signature, change, edgeDensity: density };
 }
 
 /**
@@ -227,6 +233,7 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
   const perCheckpoint: (string | null)[] = checkpoints.map(() => null);
   const perCheckpointCondition: (Condition | null)[] = checkpoints.map(() => null);
   const perCheckpointValues: (number | null)[] = [];
+  const now = Date.now();
   let readableIdx = 0;
   fetched.forEach((f, i) => {
     if (f !== null) {
@@ -234,6 +241,18 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
       perCheckpoint[i] = entry?.description ?? null;
       perCheckpointCondition[i] = entry?.condition ?? null;
       perCheckpointValues.push(entry ? CONDITION_VALUE[entry.condition] : null);
+      if (entry) {
+        // Fire-and-forget training data for a future distilled model -
+        // never blocks or affects the response.
+        void logExample({
+          cameraId: f.cp.id,
+          timestamp: now,
+          hour: new Date(now).getUTCHours(),
+          change: f.change,
+          edgeDensity: f.edgeDensity,
+          condition: entry.condition,
+        });
+      }
       readableIdx += 1;
     }
   });
