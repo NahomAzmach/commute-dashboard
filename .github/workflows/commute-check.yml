@@ -2,8 +2,12 @@ name: Commute check
 
 on:
   schedule:
-    # Every 10 minutes, 13:00-14:59 UTC (6:00-7:50 AM Pacific), weekdays only.
-    - cron: '*/10 13,14 * * 1-5'
+    # TEMPORARY: every 10 minutes, all day, every day - widened to speed up
+    # accumulation of labeled training data for a future distilled model
+    # (see lib/trainingLog.ts). Revert to the commute-window-only schedule
+    # below once enough data has built up.
+    # - cron: '*/10 13,14 * * 1-5'
+    - cron: '*/10 * * * *'
   workflow_dispatch: {}
 
 jobs:
