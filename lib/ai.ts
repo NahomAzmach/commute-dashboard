@@ -1,5 +1,7 @@
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { frameSignature, changeScore } from './visualSignals';
+import { getPreviousSignature, setSignature } from './frameHistory';
 
 const MODEL = 'google/gemini-2.5-flash-lite';
 
@@ -34,17 +36,17 @@ const AssessmentSchema = z.object({
         condition: z
           .enum(CONDITIONS)
           .describe(
-            'Pick exactly one, based only on the image: "clear" = free-flowing, normal ' +
-              'speed and spacing, INCLUDING a vehicle stopped at a visible traffic signal, ' +
-              'stop sign, or crosswalk with no queue behind it - that is normal controlled ' +
-              'stopping, not congestion. "slow" = minor slowdown, still moving. "congested" ' +
-              '= dense moving-lane traffic with visible brake lights and clearly reduced ' +
-              'speed. "stopped" = multiple vehicles queued and stopped or crawling in ' +
-              'through-traffic lanes (not vehicles waiting their turn at an intersection). ' +
-              '"unreadable" = the image genuinely shows nothing usable, or shows something ' +
-              'other than moving traffic entirely (an empty parking lot, a ferry holding ' +
-              'lot with no queue, a closed gate) - not just because it is nighttime or ' +
-              'imperfectly lit.',
+            'Pick exactly one, based on the image AND the objective signals given for it: ' +
+              '"clear" = free-flowing, normal speed and spacing, INCLUDING a vehicle stopped ' +
+              'at a visible traffic signal, stop sign, or crosswalk with no queue behind it - ' +
+              'that is normal controlled stopping, not congestion. "slow" = minor slowdown, ' +
+              'still moving. "congested" = dense moving-lane traffic with visible brake ' +
+              'lights and clearly reduced speed. "stopped" = multiple vehicles queued and ' +
+              'stopped or crawling in through-traffic lanes (not vehicles waiting their turn ' +
+              'at an intersection). "unreadable" = the image genuinely shows nothing usable, ' +
+              'or shows something other than moving traffic entirely (an empty parking lot, ' +
+              'a ferry holding lot with no queue, a closed gate) - not just because it is ' +
+              'nighttime or imperfectly lit.',
           ),
       }),
     )
@@ -101,27 +103,62 @@ function computeSeverity(values: (number | null)[]): { score: number; probabilit
   return { score, probability };
 }
 
+type CheckpointInput = { id: number; title: string; imageUrl: string };
+
+type PreparedCheckpoint = {
+  cp: CheckpointInput;
+  bytes: Uint8Array;
+  signature: Buffer;
+  change: number | null;
+};
+
+/**
+ * Computes the classical, non-LLM signal for one checkpoint: how much this
+ * frame changed since the last time anyone checked this camera
+ * (frame-differencing / background subtraction) - cheap, deterministic, and
+ * grounded in the actual pixels rather than a model's guess.
+ *
+ * An edge-density "how busy is this frame" proxy was tried alongside this
+ * and dropped after calibration testing: absolute edge energy on real WSDOT
+ * stills only spans a narrow range (~23-44 in testing) and is dominated by
+ * static background texture (guardrails, trees, lane markings), not
+ * vehicles - it doesn't discriminate reliably without a per-camera relative
+ * baseline, which is a real follow-up (see lib/visualSignals.ts).
+ */
+async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoint | null> {
+  const bytes = await fetchImageBytes(cp.imageUrl);
+  if (!bytes) return null;
+
+  const [signature, previous] = await Promise.all([
+    frameSignature(bytes),
+    getPreviousSignature(cp.id),
+  ]);
+  const change = previous ? changeScore(signature, previous) : null;
+
+  // Fire-and-forget: next check (from anyone, personal or /explore) will
+  // use this as its baseline. Not awaited inline since it doesn't affect
+  // this call's own result.
+  void setSignature(cp.id, signature);
+
+  return { cp, bytes, signature, change };
+}
+
 /**
  * Single combined call: every checkpoint image for a route goes to one
  * vision-capable model in one request, which reads all of them together and
- * classifies each.
+ * classifies each - grounded in a real, cheaply-computed frame-to-frame
+ * change signal rather than the model's own guesses about motion from a
+ * single still.
  */
-export async function assessRoute(
-  checkpoints: { title: string; imageUrl: string }[],
-): Promise<{
+export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
   perCheckpoint: (string | null)[];
   perCheckpointCondition: (Condition | null)[];
   delaySeverityScore: number;
   heavyTrafficProbability: number;
   reasoning: string;
 }> {
-  const fetched = await Promise.all(
-    checkpoints.map(async (cp) => ({ cp, bytes: await fetchImageBytes(cp.imageUrl) })),
-  );
-  const readable = fetched.filter((f) => f.bytes !== null) as {
-    cp: { title: string; imageUrl: string };
-    bytes: Uint8Array;
-  }[];
+  const fetched = await Promise.all(checkpoints.map(prepareCheckpoint));
+  const readable = fetched.filter((f): f is PreparedCheckpoint => f !== null);
 
   if (readable.length === 0) {
     return {
@@ -142,16 +179,19 @@ export async function assessRoute(
       text:
         `You are assessing live traffic conditions from ${readable.length} highway camera ` +
         'stills along one driving route, in order from the start of the drive to the end. ' +
-        'For each image below, you will see its checkpoint label immediately before it. ' +
-        'Only describe what is concretely visible - do not assume conditions from the time ' +
-        'of day or camera name.\n\n' +
-        'Many of these are nighttime images. A dark image is not automatically unreadable: ' +
-        'headlight and taillight patterns, brake-light clusters, motion blur (streaks mean ' +
-        'a vehicle is moving at speed; sharp, static lights mean it is stopped or crawling), ' +
-        'and relative spacing between light clusters are all still visible at night and are ' +
-        'real evidence you should use. Only classify an image as unreadable if none of that ' +
-        'is discernible at all - do not default to that answer just because it is nighttime ' +
-        'or the lighting is imperfect.\n\n' +
+        'Each checkpoint below includes one objective, separately-computed signal before its ' +
+        'image:\n' +
+        '- "change" (0-1): how much this exact camera\'s frame differs from the last time ' +
+        'anyone checked it, via pixel-level frame differencing against the previous frame. ' +
+        'Near 0 means almost nothing moved or changed; higher means real visual change ' +
+        'happened. Caveat: lighting shifts (dusk, headlight flare, auto-exposure) can also ' +
+        'raise this, so treat a high value as suggestive, not proof, especially right after ' +
+        'sunset/sunrise. "no prior frame" means this camera has no recent baseline to compare ' +
+        'against - treat that the same as not having this signal at all, not as evidence of ' +
+        'anything.\n\n' +
+        'Use this signal together with what you actually see - do not invent motion cues ' +
+        '(like "motion blur") that are not real in a single still frame; these are stills, ' +
+        'not long exposures. Only describe what is concretely visible.\n\n' +
         'Some cameras are on surface streets, ferry terminals, or intersections rather than ' +
         'the highway itself. A single vehicle stopped at a visible traffic signal, stop ' +
         'line, or crosswalk with nothing queued behind it is a normal controlled stop, not ' +
@@ -160,8 +200,13 @@ export async function assessRoute(
         'either way.',
     },
   ];
-  readable.forEach(({ cp }, i) => {
-    content.push({ type: 'text', text: `Checkpoint ${i + 1}: ${cp.title}` });
+  readable.forEach(({ cp, change }, i) => {
+    content.push({
+      type: 'text',
+      text:
+        `Checkpoint ${i + 1}: ${cp.title}\n` +
+        `change: ${change !== null ? change.toFixed(2) : 'no prior frame'}`,
+    });
     content.push({ type: 'image', image: readable[i].bytes });
   });
   content.push({
@@ -184,7 +229,7 @@ export async function assessRoute(
   const perCheckpointValues: (number | null)[] = [];
   let readableIdx = 0;
   fetched.forEach((f, i) => {
-    if (f.bytes !== null) {
+    if (f !== null) {
       const entry = result.object.checkpoints[readableIdx];
       perCheckpoint[i] = entry?.description ?? null;
       perCheckpointCondition[i] = entry?.condition ?? null;
