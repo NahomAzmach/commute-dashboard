@@ -15,6 +15,7 @@ export type TrainingExample = {
   hour: number;
   change: number | null;
   edgeDensity: number;
+  vehicleCount: number | null;
   condition: Condition;
 };
 
