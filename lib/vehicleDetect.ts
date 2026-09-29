@@ -2,6 +2,9 @@ import * as ort from 'onnxruntime-web/wasm';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import { Redis } from '@upstash/redis';
+
+const kv = Redis.fromEnv();
 
 const MODEL_PATH = path.join(process.cwd(), 'models', 'yolov8n.onnx');
 const INPUT_SIZE = 640;
@@ -134,7 +137,16 @@ export async function countVehicles(bytes: Uint8Array): Promise<number | null> {
     const results = await session.run({ [session.inputNames[0]]: tensor });
     const output = results[session.outputNames[0]];
     return decode(output).length;
-  } catch {
+  } catch (err) {
+    // TEMPORARY: capture the real error for one round of production
+    // debugging - this silently returns null in the live prompt either way,
+    // so it's safe, but we need visibility into *why* it's failing on
+    // Vercel specifically since it works locally. Remove once diagnosed.
+    void kv.set(
+      'debug:vehicleDetect:lastError',
+      err instanceof Error ? `${err.message}\n${err.stack}` : String(err),
+      { ex: 3600 },
+    );
     return null;
   }
 }
