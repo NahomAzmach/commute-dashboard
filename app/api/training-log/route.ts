@@ -21,10 +21,18 @@ export async function GET() {
 
     const byCondition: Record<string, number> = {};
     let withChangeSignal = 0;
+    let atCeiling = 0;
+    let densitySum = 0;
+    let densityMin = Infinity;
+    let densityMax = -Infinity;
     const cameraIds = new Set<number>();
     for (const e of entries) {
       byCondition[e.condition] = (byCondition[e.condition] ?? 0) + 1;
       if (e.change !== null && e.change !== undefined) withChangeSignal += 1;
+      if (e.edgeDensity >= 1) atCeiling += 1;
+      densitySum += e.edgeDensity;
+      densityMin = Math.min(densityMin, e.edgeDensity);
+      densityMax = Math.max(densityMax, e.edgeDensity);
       cameraIds.add(e.cameraId);
     }
 
@@ -34,6 +42,12 @@ export async function GET() {
       uniqueCameras: cameraIds.size,
       byCondition,
       withChangeSignal,
+      edgeDensityStats: {
+        atCeiling,
+        avg: entries.length ? densitySum / entries.length : null,
+        min: entries.length ? densityMin : null,
+        max: entries.length ? densityMax : null,
+      },
       newest: entries.slice(0, 5),
     });
   } catch (error) {
