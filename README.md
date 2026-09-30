@@ -35,4 +35,8 @@ flowchart TD
 
 ## Stack, roughly
 
-Next.js on Vercel, Upstash Redis for state + rate limiting, GitHub Actions for scheduling (Vercel's own cron jobs cap out at once/day on the free tier), Gemini 2.5 Flash-Lite via Vercel's AI Gateway for the actual reads, OSRM and Nominatim for the `/explore` routing/geocoding, and WSDOT's public camera API for literally all of the source footage.
+Next.js on Vercel, Upstash Redis for state + rate limiting, GitHub Actions for scheduling (Vercel's own cron jobs cap out at once/day on the free tier), Gemini 2.5 Flash-Lite via Vercel's AI Gateway for the actual reads, and OSRM + Nominatim for the `/explore` routing/geocoding.
+
+**WSDOT APIs:**
+- **Highway Cameras API** — the live still images every check is built on.
+- **Traffic Flow API** — real loop-detector sensor readings near each camera, independent of the image entirely, shown as a "Sensor: ___" reading next to the AI's own read. Early results are mixed — it sometimes disagrees with what's visibly happening in the frame, so treat it as a second opinion, not ground truth.
