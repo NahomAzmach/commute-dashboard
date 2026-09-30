@@ -1,10 +1,6 @@
-import * as ort from 'onnxruntime-web/wasm';
+import * as ort from 'onnxruntime-node';
 import sharp from 'sharp';
-import fs from 'fs';
 import path from 'path';
-import { Redis } from '@upstash/redis';
-
-const kv = Redis.fromEnv();
 
 const MODEL_PATH = path.join(process.cwd(), 'models', 'yolov8n.onnx');
 const INPUT_SIZE = 640;
@@ -14,38 +10,44 @@ const IOU_THRESHOLD = 0.45;
 // COCO class indices (0-indexed, standard COCO ordering) for vehicle types.
 const VEHICLE_CLASSES = new Set([2, 3, 5, 7]); // car, motorcycle, bus, truck
 
-// Single-threaded: Vercel's serverless functions have limited CPU, and
-// worker-thread based wasm threading is fragile outside a browser.
-ort.env.wasm.numThreads = 1;
-
 /**
- * Real, pretrained (COCO) vehicle detection via YOLOv8n, run through
- * onnxruntime-web's wasm backend rather than a native binary - this is
- * deliberately not onnxruntime-node, because native binaries are exactly
- * what broke sharp on this project once already, and are a much bigger risk
- * on Vercel's serverless Linux containers. No training data of our own is
- * needed: this model already knows what a car/truck/bus looks like from
- * COCO, so it works on any WSDOT camera from day one.
+ * Real, pretrained (COCO) vehicle detection via YOLOv8n. No training data of
+ * our own is needed: this model already knows what a car/truck/bus looks
+ * like from COCO, so it works on any WSDOT camera from day one.
  *
- * Validated against real WSDOT stills (see project history) - this WASM
- * path tracks a reference PyTorch run closely once preprocessing matches
- * (letterbox, not a stretched resize - see preprocess() below). Known
- * limitation: small/distant vehicles in heavy fog or low contrast sit right
- * at the confidence threshold and can be missed. Treat the count as a real
- * but imperfect signal, same spirit as the frame-differencing "change"
- * score - corroborating evidence, not ground truth.
+ * Runs via onnxruntime-node (native binary) rather than onnxruntime-web's
+ * wasm backend - wasm was tried first specifically to avoid native-binary
+ * deployment risk (the same class of problem that broke sharp on Windows
+ * earlier in this project), but onnxruntime-web's own internal dynamic
+ * module loading turned out to be un-traceable by Next's serverless file
+ * tracing (a real, confirmed-in-production dead end, not a guess). sharp
+ * itself is the existing precedent that native binaries deploy fine on
+ * Vercel's actual Linux build target - the earlier breakage was strictly a
+ * local Windows dev-environment issue, not a serverless one. This still
+ * needs its native binary explicitly force-included (see
+ * next.config.js) since Next's tracer doesn't discover it automatically
+ * either.
+ *
+ * Validated against real WSDOT stills before wiring in: a reference PyTorch
+ * run against a diverse sample, spot-checked by eye against the source
+ * images. Letterbox preprocessing (not a stretched resize) was necessary to
+ * match that reference model's accuracy - stretching measurably hurt
+ * detection of small/distant vehicles. Known limitation: low-contrast
+ * scenes (heavy fog/rain) can still miss small distant vehicles - treat the
+ * count as a real but imperfect signal, same spirit as the
+ * frame-differencing "change" score - corroborating evidence, not ground
+ * truth.
  */
 
 let sessionPromise: Promise<ort.InferenceSession> | null = null;
 
 function getSession(): Promise<ort.InferenceSession> {
-  // Lazy singleton - loading the model/wasm runtime costs ~350-500ms, so a
-  // warm serverless instance reuses it across every checkpoint and every
-  // subsequent invocation instead of paying that cost per image.
+  // Lazy singleton - a warm serverless instance reuses it across every
+  // checkpoint and every subsequent invocation instead of reloading it
+  // (and its ~45MB native binary) per image.
   if (!sessionPromise) {
-    const modelBytes = fs.readFileSync(MODEL_PATH);
-    sessionPromise = ort.InferenceSession.create(modelBytes, {
-      executionProviders: ['wasm'],
+    sessionPromise = ort.InferenceSession.create(MODEL_PATH, {
+      executionProviders: ['cpu'],
     });
   }
   return sessionPromise;
@@ -138,11 +140,11 @@ export async function countVehicles(bytes: Uint8Array): Promise<number | null> {
     const output = results[session.outputNames[0]];
     return decode(output).length;
   } catch (err) {
-    // TEMPORARY: capture the real error for one round of production
-    // debugging - this silently returns null in the live prompt either way,
-    // so it's safe, but we need visibility into *why* it's failing on
-    // Vercel specifically since it works locally. Remove once diagnosed.
-    void kv.set(
+    // TEMPORARY: capture the real error for one more round of production
+    // debugging (onnxruntime-node's native binary loading is the current
+    // unknown). Remove once diagnosed.
+    const { Redis } = require('@upstash/redis');
+    void Redis.fromEnv().set(
       'debug:vehicleDetect:lastError',
       err instanceof Error ? `${err.message}\n${err.stack}` : String(err),
       { ex: 3600 },

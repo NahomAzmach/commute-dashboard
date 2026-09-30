@@ -12,7 +12,7 @@
     "ai": "^7.0.118",
     "leaflet": "^1.9.4",
     "next": "^15.0.0",
-    "onnxruntime-web": "^1.30.0",
+    "onnxruntime-node": "^1.30.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sharp": "^0.35.5",
@@ -23,5 +23,8 @@
     "@types/node": "20.17.6",
     "@types/react": "19.3.0",
     "typescript": "5.8.2"
+  },
+  "allowScripts": {
+    "onnxruntime-node@1.30.0": true
   }
 }
