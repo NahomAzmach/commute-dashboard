@@ -5,6 +5,16 @@ export type FeedCheckpoint = {
   title: string;
   imageUrl: string;
   description: string;
+  flowLabel?: string | null;
+};
+
+// Per WSDOT's Traffic Flow API - real loop-detector sensor data, independent
+// of the camera image.
+const FLOW_TONE: Record<string, string> = {
+  WideOpen: 'flow-good',
+  Moderate: 'flow-warn',
+  Heavy: 'flow-bad',
+  StopAndGo: 'flow-bad',
 };
 
 export default function FeedGrid({
@@ -36,6 +46,11 @@ export default function FeedGrid({
             <div className="feed-caption">
               <p className="feed-title">{cp.title}</p>
               <p className="feed-desc">{cp.description}</p>
+              {cp.flowLabel && (
+                <span className={`feed-flow ${FLOW_TONE[cp.flowLabel] ?? 'flow-warn'}`}>
+                  Sensor: {cp.flowLabel}
+                </span>
+              )}
             </div>
           </div>
         ))}

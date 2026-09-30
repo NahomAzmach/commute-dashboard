@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { frameSignature, changeScore, edgeDensity } from './visualSignals';
 import { getPreviousSignature, setSignature } from './frameHistory';
 import { countVehicles } from './vehicleDetect';
+import { findNearestFlow, type FlowReading } from './wsdotFlow';
 import { logExample } from './trainingLog';
 
 const MODEL = 'google/gemini-2.5-flash-lite';
@@ -105,7 +106,7 @@ function computeSeverity(values: (number | null)[]): { score: number; probabilit
   return { score, probability };
 }
 
-type CheckpointInput = { id: number; title: string; imageUrl: string };
+type CheckpointInput = { id: number; title: string; imageUrl: string; lat: number; lon: number };
 
 type PreparedCheckpoint = {
   cp: CheckpointInput;
@@ -114,6 +115,7 @@ type PreparedCheckpoint = {
   change: number | null;
   edgeDensity: number;
   vehicleCount: number | null;
+  flow: FlowReading | null;
 };
 
 /**
@@ -136,11 +138,12 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
   const bytes = await fetchImageBytes(cp.imageUrl);
   if (!bytes) return null;
 
-  const [signature, previous, density, vehicleCount] = await Promise.all([
+  const [signature, previous, density, vehicleCount, flow] = await Promise.all([
     frameSignature(bytes),
     getPreviousSignature(cp.id),
     edgeDensity(bytes),
     countVehicles(bytes),
+    findNearestFlow(cp.lat, cp.lon),
   ]);
   const change = previous ? changeScore(signature, previous) : null;
 
@@ -149,7 +152,7 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
   // this call's own result.
   void setSignature(cp.id, signature);
 
-  return { cp, bytes, signature, change, edgeDensity: density, vehicleCount };
+  return { cp, bytes, signature, change, edgeDensity: density, vehicleCount, flow };
 }
 
 /**
@@ -162,6 +165,7 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
 export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
   perCheckpoint: (string | null)[];
   perCheckpointCondition: (Condition | null)[];
+  perCheckpointFlow: (FlowReading | null)[];
   delaySeverityScore: number;
   heavyTrafficProbability: number;
   reasoning: string;
@@ -173,6 +177,7 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
     return {
       perCheckpoint: checkpoints.map(() => null),
       perCheckpointCondition: checkpoints.map(() => null),
+      perCheckpointFlow: checkpoints.map(() => null),
       delaySeverityScore: 0,
       heavyTrafficProbability: 0,
       reasoning: 'No checkpoint images could be loaded, so no assessment could be made.',
@@ -203,7 +208,13 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
         'an actual per-object count. Weigh it alongside what you see, but it can undercount ' +
         'in heavy fog, rain, glare, or when vehicles are small/distant/partially hidden, so a ' +
         'low count does not strictly rule out traffic the image itself clearly shows. "n/a" ' +
-        'means detection failed for this frame - treat that the same as not having the signal.' +
+        'means detection failed for this frame - treat that the same as not having the signal.\n' +
+        '- "sensor": a real reading from a WSDOT road-sensor (loop detector) near this camera, ' +
+        'independent of the image entirely - one of WideOpen, Moderate, Heavy, StopAndGo, or ' +
+        '"none nearby" if no sensor is close enough to this location to be meaningful. This is ' +
+        'the most authoritative signal available when present - it is actual measured traffic, ' +
+        'not a visual proxy - so if it conflicts with what the image alone suggests, treat the ' +
+        'sensor as the stronger evidence, but still describe only what you concretely see.' +
         '\n\n' +
         'Use these signals together with what you actually see - do not invent motion cues ' +
         '(like "motion blur") that are not real in a single still frame; these are stills, ' +
@@ -216,13 +227,14 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
         'either way.',
     },
   ];
-  readable.forEach(({ cp, change, vehicleCount }, i) => {
+  readable.forEach(({ cp, change, vehicleCount, flow }, i) => {
     content.push({
       type: 'text',
       text:
         `Checkpoint ${i + 1}: ${cp.title}\n` +
         `change: ${change !== null ? change.toFixed(2) : 'no prior frame'}\n` +
-        `vehicles: ${vehicleCount !== null ? vehicleCount : 'n/a'}`,
+        `vehicles: ${vehicleCount !== null ? vehicleCount : 'n/a'}\n` +
+        `sensor: ${flow ? flow.label : 'none nearby'}`,
     });
     content.push({ type: 'image', image: readable[i].bytes });
   });
@@ -243,6 +255,7 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
 
   const perCheckpoint: (string | null)[] = checkpoints.map(() => null);
   const perCheckpointCondition: (Condition | null)[] = checkpoints.map(() => null);
+  const perCheckpointFlow: (FlowReading | null)[] = checkpoints.map(() => null);
   const perCheckpointValues: (number | null)[] = [];
   const now = Date.now();
   let readableIdx = 0;
@@ -251,6 +264,7 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
       const entry = result.object.checkpoints[readableIdx];
       perCheckpoint[i] = entry?.description ?? null;
       perCheckpointCondition[i] = entry?.condition ?? null;
+      perCheckpointFlow[i] = f.flow;
       perCheckpointValues.push(entry ? CONDITION_VALUE[entry.condition] : null);
       if (entry) {
         // Fire-and-forget training data for a future distilled model -
@@ -262,6 +276,7 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
           change: f.change,
           edgeDensity: f.edgeDensity,
           vehicleCount: f.vehicleCount,
+          flowReading: f.flow ? f.flow.value : null,
           condition: entry.condition,
         });
       }
@@ -274,6 +289,7 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
   return {
     perCheckpoint,
     perCheckpointCondition,
+    perCheckpointFlow,
     delaySeverityScore: score,
     heavyTrafficProbability: probability,
     reasoning: result.object.reasoning,

@@ -16,6 +16,12 @@ export type TrainingExample = {
   change: number | null;
   edgeDensity: number;
   vehicleCount: number | null;
+  // WSDOT's own loop-detector reading nearest this camera (0=Unknown,
+  // 1=WideOpen, 2=Moderate, 3=Heavy, 4=StopAndGo, 5=NoData), or null if no
+  // sensor sits close enough - independent ground truth, not derived from
+  // the image, useful for checking how well `condition` actually tracks
+  // real measured traffic (see lib/wsdotFlow.ts).
+  flowReading: number | null;
   condition: Condition;
 };
 
