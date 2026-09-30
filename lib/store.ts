@@ -8,6 +8,7 @@ export type CheckpointResult = {
   imageUrl: string;
   description: string;
   condition: string | null;
+  flowLabel: string | null;
   lat: number;
   lon: number;
 };

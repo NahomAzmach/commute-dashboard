@@ -30,6 +30,7 @@ export async function runLiveCheck(
     lon: cp.lon,
     description: assessment.perCheckpoint[i] ?? 'Could not load this camera frame.',
     condition: assessment.perCheckpointCondition[i],
+    flowLabel: assessment.perCheckpointFlow[i]?.label ?? null,
   }));
 
   return {
