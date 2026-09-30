@@ -139,16 +139,7 @@ export async function countVehicles(bytes: Uint8Array): Promise<number | null> {
     const results = await session.run({ [session.inputNames[0]]: tensor });
     const output = results[session.outputNames[0]];
     return decode(output).length;
-  } catch (err) {
-    // TEMPORARY: capture the real error for one more round of production
-    // debugging (onnxruntime-node's native binary loading is the current
-    // unknown). Remove once diagnosed.
-    const { Redis } = require('@upstash/redis');
-    void Redis.fromEnv().set(
-      'debug:vehicleDetect:lastError',
-      err instanceof Error ? `${err.message}\n${err.stack}` : String(err),
-      { ex: 3600 },
-    );
+  } catch {
     return null;
   }
 }
