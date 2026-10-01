@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { geocode } from '../../../lib/geocode';
 import { getDrivingRoute } from '../../../lib/routing';
 import { getWsdotCatalog } from '../../../lib/wsdot';
+import { getSeattleCameraCatalog } from '../../../lib/seattleCams';
 import { findCamerasAlongRoute } from '../../../lib/geometry';
 import { runLiveCheck } from '../../../lib/liveCheck';
 import { checkRateLimit } from '../../../lib/ratelimit';
@@ -48,14 +49,20 @@ export async function POST(req: NextRequest) {
     }
 
     const routeLine = await getDrivingRoute(from, to);
-    const catalog = await getWsdotCatalog();
+    // Seattle's catalog is a newer, secondary addition - a hiccup there
+    // shouldn't take down /explore for routes that don't even touch Seattle.
+    const [wsdotCameras, seattleCameras] = await Promise.all([
+      getWsdotCatalog(),
+      getSeattleCameraCatalog().catch(() => []),
+    ]);
+    const catalog = [...wsdotCameras, ...seattleCameras];
     const nearby = findCamerasAlongRoute(catalog, routeLine, 1.2, 8);
 
     if (!nearby.length) {
       return NextResponse.json(
         {
           error:
-            'No WSDOT cameras found within about a mile of that route. Try a route that follows a state highway or interstate.',
+            'No traffic cameras found within about a mile of that route. Try a route that follows a state highway, interstate, or Seattle street.',
         },
         { status: 404 },
       );
