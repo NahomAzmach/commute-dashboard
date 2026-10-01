@@ -19,5 +19,5 @@ jobs:
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -sf "$DASHBOARD_URL/api/cron/check?secret=$CRON_SECRET" -o response.json -w "\nstatus: %{http_code}\n"
+          curl -s --fail-with-body "$DASHBOARD_URL/api/cron/check?secret=$CRON_SECRET" -o response.json -w "\nstatus: %{http_code}\n"
           cat response.json
