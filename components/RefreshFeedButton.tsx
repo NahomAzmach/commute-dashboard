@@ -1,19 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { refreshLiveImages } from '../lib/refreshImages';
+
+const AUTO_REFRESH_MS = 20000;
 
 export default function RefreshFeedButton() {
   const [state, setState] = useState<'idle' | 'done'>('idle');
 
+  // Auto-refresh on a timer so the feed feels live without a click - same
+  // cache-busting as the manual button, just on a schedule.
+  useEffect(() => {
+    const id = window.setInterval(refreshLiveImages, AUTO_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
   function handleClick() {
-    const images = document.querySelectorAll<HTMLImageElement>('img[data-live-src]');
-    images.forEach((img) => {
-      const base = img.getAttribute('data-live-src');
-      if (!base) return;
-      const url = new URL(base, window.location.href);
-      url.searchParams.set('t', Date.now().toString());
-      img.src = url.toString();
-    });
+    refreshLiveImages();
     setState('done');
     window.setTimeout(() => setState('idle'), 1500);
   }

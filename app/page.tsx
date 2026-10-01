@@ -5,6 +5,7 @@ import Link from 'next/link';
 import VerdictPanel from '../components/VerdictPanel';
 import FeedGrid from '../components/FeedGrid';
 import RouteMapLoader from '../components/RouteMapLoader';
+import RefreshFeedButton from '../components/RefreshFeedButton';
 import { toneForScore } from '../lib/severity';
 import type { RouteStatus } from '../lib/store';
 
@@ -66,6 +67,9 @@ export default function ExplorePage() {
           <Link href="/" className="hudbar-navlink active">
             EXPLORE A ROUTE
           </Link>
+          <Link href="/cameras" className="hudbar-navlink">
+            ALL CAMERAS
+          </Link>
         </nav>
       </div>
 
@@ -125,6 +129,9 @@ export default function ExplorePage() {
 
       {result && (
         <>
+          <div className="refresh-row">
+            <RefreshFeedButton />
+          </div>
           <VerdictPanel
             score={result.route.delaySeverityScore}
             headline={result.route.summary}
