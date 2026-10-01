@@ -62,6 +62,9 @@ export default async function CommutePage() {
           <Link href="/" className="hudbar-navlink">
             EXPLORE A ROUTE
           </Link>
+          <Link href="/cameras" className="hudbar-navlink">
+            ALL CAMERAS
+          </Link>
         </nav>
       </div>
 
