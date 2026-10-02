@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import { lynnwoodCameras } from '../lib/lynnwoodCams';
 
 export type BrowseCamera = {
   id: number;
@@ -16,17 +17,15 @@ export type BrowseCamera = {
   source: 'wsdot' | 'seattle';
 };
 
-const SOURCE_COLOR: Record<BrowseCamera['source'], string> = {
+const SOURCE_COLOR = {
   wsdot: '#4fd1ae',
   seattle: '#e8a33d',
-};
+  lynnwood: '#60a5fa',
+} as const;
 
 /**
- * Pure browse view of every camera on file - no AI read, no live check,
- * just location + a live still on click. Markers are clustered since this
- * is ~2,000 points at once; images only load when a popup is actually
- * opened (Leaflet doesn't render bound popup content into the DOM until
- * then), so this never fires 2,000 image requests up front.
+ * Browse view of statewide cameras plus Lynnwood DaCast cameras.
+ * Lynnwood markers open their DaCast live player in the popup.
  */
 export default function AllCamerasMap({ cameras }: { cameras: BrowseCamera[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -64,10 +63,37 @@ export default function AllCamerasMap({ cameras }: { cameras: BrowseCamera[] }) 
       L.marker([cam.lat, cam.lon], { icon }).addTo(clusterGroup).bindPopup(popupHtml);
     }
 
+    for (const cam of lynnwoodCameras) {
+      const icon = L.divIcon({
+        className: '',
+        html: `<span style="display:block;width:12px;height:12px;border-radius:50%;background:${SOURCE_COLOR.lynnwood};border:2px solid rgba(10,15,28,0.95);box-shadow:0 0 0 2px rgba(96,165,250,0.2);"></span>`,
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
+      });
+
+      const popupHtml = `
+        <div style="font-family: var(--font-mono, monospace); font-size: 12px; width: 300px; max-width: 75vw;">
+          <div style="font-weight:600; margin-bottom:6px;">${escapeHtml(cam.name)}</div>
+          <div style="color:#6b7280; margin-bottom:8px;">Lynnwood live traffic camera</div>
+          <iframe
+            src="${cam.iframeUrl}"
+            title="${escapeHtml(cam.name)}"
+            loading="lazy"
+            allow="autoplay; fullscreen"
+            allowfullscreen
+            style="width:100%; height:170px; border:0; border-radius:4px; display:block; background:#0a0f1c;"
+          ></iframe>
+        </div>
+      `;
+
+      L.marker([cam.lat, cam.lon], { icon }).addTo(clusterGroup).bindPopup(popupHtml, {
+        maxWidth: 320,
+        minWidth: 300,
+      });
+    }
+
     clusterGroup.addTo(map);
 
-    // Re-fetch the image fresh every time a popup is opened, rather than
-    // showing whatever the browser happened to cache from a prior visit.
     map.on('popupopen', (e) => {
       const img = e.popup.getElement()?.querySelector<HTMLImageElement>('img[data-live-src]');
       if (!img) return;
