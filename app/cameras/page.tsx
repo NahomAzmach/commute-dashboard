@@ -3,6 +3,7 @@ import { getWsdotCatalog } from '../../lib/wsdot';
 import { getSeattleCameraCatalog } from '../../lib/seattleCams';
 import AllCamerasMapLoader from '../../components/AllCamerasMapLoader';
 import type { BrowseCamera } from '../../components/AllCamerasMap';
+import { lynnwoodCameras } from '../../lib/lynnwoodCams';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +56,10 @@ export default async function AllCamerasPage() {
         <span>
           <span className="map-legend-dot" style={{ background: '#e8a33d' }} />
           Seattle DOT ({seattleCameras.length.toLocaleString()})
+        </span>
+        <span>
+          <span className="map-legend-dot" style={{ background: '#60a5fa' }} />
+          Lynnwood ({lynnwoodCameras.length})
         </span>
       </div>
 
