@@ -1,6 +1,7 @@
 import { getState } from '../../lib/store';
 import { HOME, WORK, USUAL_LEAVE_TIME, HOME_COORDS, WORK_COORDS, ROUTES } from '../../lib/checkpoints';
 import { toneForScore } from '../../lib/severity';
+import LynnwoodCameraGrid from '../../components/LynnwoodCameraGrid';
 import RouteMapLoader from '../../components/RouteMapLoader';
 import RefreshFeedButton from '../../components/RefreshFeedButton';
 import VerdictPanel from '../../components/VerdictPanel';
@@ -119,6 +120,16 @@ export default async function CommutePage() {
           checkpoints={state.alternate.checkpoints}
         />
       )}
+
+      {state.alternate && (
+        <FeedGrid
+          label={state.alternate.label}
+          index={2}
+          score={state.alternate.delaySeverityScore}
+          checkpoints={state.alternate.checkpoints}
+        />
+      )}
+      <LynnwoodCameraGrid />
 
       <div className="foot">
         Live stills served directly from images.wsdot.wa.gov &middot; congestion calls from
