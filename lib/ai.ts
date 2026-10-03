@@ -16,7 +16,12 @@ async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
     // A real camera JPEG is at least a few KB; anything tinier is almost
     // certainly a broken/placeholder response, not a frame worth reading.
     if (buf.byteLength < 500) return null;
-    return new Uint8Array(buf);
+    const bytes = new Uint8Array(buf);
+    // Camera feeds are JPEGs. An HTML error/placeholder page can be larger
+    // than the size floor and still makes sharp throw downstream, which
+    // would fail the whole check for every camera on the route.
+    if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+    return bytes;
   } catch {
     return null;
   }
