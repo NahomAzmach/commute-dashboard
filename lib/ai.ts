@@ -4,6 +4,7 @@ import { frameSignature, changeScore, edgeDensity } from './visualSignals';
 import { getPreviousSignature, setSignature } from './frameHistory';
 import { countVehicles } from './vehicleDetect';
 import { findNearestFlow, type FlowReading } from './wsdotFlow';
+import { getTravelContext, type TravelContext } from './wsdotTravel';
 import { logExample } from './trainingLog';
 
 const MODEL = 'google/gemini-2.5-flash-lite';
@@ -121,6 +122,7 @@ type PreparedCheckpoint = {
   edgeDensity: number;
   vehicleCount: number | null;
   flow: FlowReading | null;
+  travel: TravelContext;
 };
 
 /**
@@ -143,12 +145,13 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
   const bytes = await fetchImageBytes(cp.imageUrl);
   if (!bytes) return null;
 
-  const [signature, previous, density, vehicleCount, flow] = await Promise.all([
+  const [signature, previous, density, vehicleCount, flow, travel] = await Promise.all([
     frameSignature(bytes),
     getPreviousSignature(cp.id),
     edgeDensity(bytes),
     countVehicles(bytes),
     findNearestFlow(cp.lat, cp.lon),
+    getTravelContext(cp.lat, cp.lon),
   ]);
   const change = previous ? changeScore(signature, previous) : null;
 
@@ -156,7 +159,7 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
   // so a fire-and-forget write often never lands and the next check finds no baseline.
   await setSignature(cp.id, signature);
 
-  return { cp, bytes, signature, change, edgeDensity: density, vehicleCount, flow };
+  return { cp, bytes, signature, change, edgeDensity: density, vehicleCount, flow, travel };
 }
 
 /**
@@ -281,6 +284,8 @@ export async function assessRoute(checkpoints: CheckpointInput[]): Promise<{
           edgeDensity: f.edgeDensity,
           vehicleCount: f.vehicleCount,
           flowReading: f.flow ? f.flow.value : null,
+          travelRatio: f.travel.travelRatio,
+          incident: f.travel.incident,
           condition: entry.condition,
         });
       }
