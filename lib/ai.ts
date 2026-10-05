@@ -152,10 +152,9 @@ async function prepareCheckpoint(cp: CheckpointInput): Promise<PreparedCheckpoin
   ]);
   const change = previous ? changeScore(signature, previous) : null;
 
-  // Fire-and-forget: next check (from anyone, personal or /explore) will
-  // use this as its baseline. Not awaited inline since it doesn't affect
-  // this call's own result.
-  void setSignature(cp.id, signature);
+  // Awaited: serverless runtimes can freeze right after the response is sent,
+  // so a fire-and-forget write often never lands and the next check finds no baseline.
+  await setSignature(cp.id, signature);
 
   return { cp, bytes, signature, change, edgeDensity: density, vehicleCount, flow };
 }
