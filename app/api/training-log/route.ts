@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
 
 const kv = Redis.fromEnv();
@@ -8,14 +8,22 @@ const SAMPLE_CAP = 5000;
 
 /**
  * Read-only visibility into the distillation training log (lib/trainingLog.ts).
- * No local Redis credentials exist for this project, so this is the only way
- * to check what's actually accumulating without going into the Upstash
- * console. Not sensitive data - camera IDs, timestamps, and traffic
- * condition labels, the same kind of thing /explore already surfaces.
+ * Public mode returns aggregate stats only. ?export=1 with the CRON_SECRET
+ * returns every raw row for offline analysis.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const total = await kv.llen(LOG_KEY);
+
+    if (req.nextUrl.searchParams.get('export') === '1') {
+      const secret = process.env.CRON_SECRET;
+      if (!secret || req.nextUrl.searchParams.get('secret') !== secret) {
+        return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+      }
+      const rows = await kv.lrange<string>(LOG_KEY, 0, total - 1);
+      return NextResponse.json(rows.map((r) => (typeof r === 'string' ? JSON.parse(r) : r)));
+    }
+
     const raw = await kv.lrange<string>(LOG_KEY, 0, Math.min(total, SAMPLE_CAP) - 1);
     const entries = raw.map((r) => (typeof r === 'string' ? JSON.parse(r) : r));
 
