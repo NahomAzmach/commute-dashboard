@@ -22,6 +22,10 @@ export type TrainingExample = {
   // the image, useful for checking how well `condition` actually tracks
   // real measured traffic (see lib/wsdotFlow.ts).
   flowReading: number | null;
+  // Current / typical travel time on the nearest WSDOT segment (1.0 = normal), and whether
+  // a collision, incident, or closure sits within a mile. Independent road-level labels.
+  travelRatio: number | null;
+  incident: boolean;
   condition: Condition;
 };
 
