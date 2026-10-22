@@ -2,12 +2,16 @@ name: Commute check
 
 on:
   schedule:
-    # TEMPORARY: every 10 minutes, all day, every day - widened to speed up
-    # accumulation of labeled training data for a future distilled model
-    # (see lib/trainingLog.ts). Revert to the commute-window-only schedule
-    # below once enough data has built up.
-    # - cron: '*/10 13,14 * * 1-5'
-    - cron: '*/10 * * * *'
+    # Commute-hour-weighted collection: a month of uniform 24/7 checks left
+    # the rare classes (congested/stopped) thin - most of that time was spent
+    # logging overnight/midday hours where nothing happens. These three
+    # entries partition all 24 UTC hours with no gap and no overlap:
+    # every 5 min during commute windows (covers both PST and PDT, ~6-10am
+    # and ~3-7pm Pacific), every 30 min otherwise - still well under the
+    # 2-hour frame-differencing baseline TTL during off-peak.
+    - cron: '*/5 13-18 * * *'
+    - cron: '*/5 22-23,0-3 * * *'
+    - cron: '*/30 4-12,19-21 * * *'
   workflow_dispatch: {}
 
 jobs:

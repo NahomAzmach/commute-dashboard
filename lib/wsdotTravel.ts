@@ -4,7 +4,13 @@ const kv = Redis.fromEnv();
 const TRAVEL_KEY = 'wsdot:traveltimes:v1';
 const ALERTS_KEY = 'wsdot:alerts:v1';
 const CACHE_TTL_SECONDS = 5 * 60;
-const SEGMENT_MAX_MILES = 0.5;
+// WSDOT's travel-time segments are long, curvy real corridors but their API
+// only gives start/end points - our straight-line-chord distance check can
+// put a camera that's genuinely on the corridor more than half a mile from
+// that chord. Checked against real camera coordinates: 0.5mi covered 77% of
+// training cameras, 1.5mi covers 88%; past that the remaining cameras are
+// 2mi+ away and not meaningfully on a tracked corridor at all.
+const SEGMENT_MAX_MILES = 1.5;
 const INCIDENT_MAX_MILES = 1;
 const INCIDENT_CATEGORIES = new Set(['Collision', 'Incident', 'Closure']);
 
