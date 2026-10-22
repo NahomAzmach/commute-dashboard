@@ -1,17 +1,15 @@
 name: Commute check
 
 on:
-  schedule:
-    # Commute-hour-weighted collection: a month of uniform 24/7 checks left
-    # the rare classes (congested/stopped) thin - most of that time was spent
-    # logging overnight/midday hours where nothing happens. These three
-    # entries partition all 24 UTC hours with no gap and no overlap:
-    # every 5 min during commute windows (covers both PST and PDT, ~6-10am
-    # and ~3-7pm Pacific), every 30 min otherwise - still well under the
-    # 2-hour frame-differencing baseline TTL during off-peak.
-    - cron: '*/5 13-18 * * *'
-    - cron: '*/5 22-23,0-3 * * *'
-    - cron: '*/30 4-12,19-21 * * *'
+  # Scheduling moved to Upstash QStash (three schedules: commute-morning,
+  # commute-evening, commute-offpeak), which actually honors the cadence -
+  # GitHub's own `schedule` trigger did not reliably fire on time regardless
+  # of the cron expression (observed gaps of 3-6 hours against a configured
+  # 10-minute interval). Kept here only as a record and for manual runs.
+  # schedule:
+  #   - cron: '*/5 13-18 * * *'
+  #   - cron: '*/5 22-23,0-3 * * *'
+  #   - cron: '*/30 4-12,19-21 * * *'
   workflow_dispatch: {}
 
 jobs:
