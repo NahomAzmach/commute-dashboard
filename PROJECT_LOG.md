@@ -169,25 +169,47 @@ collection-targeting problem.** Two fixes shipped:
    logged checkpoints now carries a `travelRatio`, where roughly half
    previously had none.
 2. Changed the check schedule from uniform `*/10 * * * *` all day to three
-   partitioned entries: every 5 min during commute windows (~6-10am and
-   ~3-7pm Pacific, covering both PST/PDT), every 30 min otherwise. Still
-   waiting on real commute-hour data to accumulate to confirm this actually
-   grows the rare classes faster; the mechanism (more samples exactly when
-   congestion happens) is sound but unverified until the data comes in.
+   partitioned windows: every 5 min during commute hours (~6-10am and
+   ~3-7pm Pacific), every 30 min otherwise.
 
-Separately unresolved: GitHub Actions' `schedule` trigger still doesn't
-reliably fire on time regardless of the cron expression (documented above,
-under Cron reliability) — this new schedule is the correct source of truth,
-but how closely GitHub actually honors it in practice is still an open
-question.
+### Trigger moved off GitHub Actions entirely: Upstash QStash
+
+GitHub Actions' `schedule` trigger never reliably fired on time no matter
+the cron expression — observed gaps of 3-6 hours against a configured
+10-minute interval, confirmed across multiple separate incidents (see Cron
+reliability above). Rather than keep tuning a cron expression GitHub wasn't
+honoring, moved the trigger to Upstash QStash, which the project already
+had an account for.
+
+Three QStash schedules (`commute-morning`, `commute-evening`,
+`commute-offpeak`) call `/api/cron/check` directly via HTTP, using
+`CRON_TZ=America/Los_Angeles` for proper DST-aware local time instead of
+the manual UTC-hour-splitting GitHub's cron required. Auth is forwarded via
+`Upstash-Forward-Authorization`, matching the existing `Bearer` check
+already in the route.
+
+**Confirmed working**, not just configured: training log grew by 165 rows
+in 82 minutes immediately after the schedules were created, consistent
+with ~5 min firing during the evening commute window, then correctly
+dropping to the ~30 min off-peak rate right at the 7pm Pacific boundary.
+GitHub Actions' `schedule` trigger is now disabled (`workflow_dispatch`
+kept for manual runs) — no reason to keep two triggers once one is proven
+unreliable and the other is proven working.
+
+One real incident during this migration, worth recording: QStash and
+CRON_SECRET credentials were accidentally pasted into chat while
+troubleshooting a PowerShell/curl syntax error. Both were rotated
+immediately. Lesson for next time — hand over the error output, not the
+full command with the secret still in it.
 
 ## Current state (as of this entry)
 
-- 2,117 labeled examples, 58 unique cameras (count will keep climbing from
-  here — this is a point-in-time snapshot, not a final total).
+- 2,282+ labeled examples (growing continuously now, no longer gated by an
+  unreliable trigger), 58+ unique cameras.
 - Condition mix (previous snapshot, pre-reweighting): clear 83%, congested
   5.2%, slow 5.9%, stopped 3.3%, unreadable 2.4%. Expect this to shift as
-  commute-hour-weighted collection accumulates.
+  commute-hour-weighted collection accumulates — not yet re-measured since
+  the schedule change.
 - Travel-ratio coverage: was 57% of checkpoints, confirmed improved after
   the radius widening (not yet re-measured as a percentage at scale).
 - No distilled model shipped yet — correctly not ready; the data pipeline
