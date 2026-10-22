@@ -160,18 +160,35 @@ validated (tested only on cameras never seen in training).
   collection rather than commute-hour-weighted collection.
 
 **Conclusion: not a label-quality problem after all — a coverage and
-collection-targeting problem.** Two fixes in progress now:
-1. Widen the travel-time segment match radius from 0.5mi to 1.5mi (verified
-   against real data: lifts WSDOT camera coverage from 77% to 88%; beyond
-   1.5mi the remaining cameras are 2mi+ away and not meaningfully on a
-   tracked corridor).
-2. Shift the check schedule to run far more often during commute windows
-   and less often off-peak, instead of uniformly all day, to grow the rare
-   classes faster.
+collection-targeting problem.** Two fixes shipped:
+1. Widened the travel-time segment match radius from 0.5mi to 1.5mi
+   (verified against real data before changing it: lifts WSDOT camera
+   coverage from 77% to 88%; beyond 1.5mi the remaining cameras are 2mi+
+   away and not meaningfully on a tracked corridor). **Confirmed live** —
+   checked the next production run after deploy: every one of the newest
+   logged checkpoints now carries a `travelRatio`, where roughly half
+   previously had none.
+2. Changed the check schedule from uniform `*/10 * * * *` all day to three
+   partitioned entries: every 5 min during commute windows (~6-10am and
+   ~3-7pm Pacific, covering both PST/PDT), every 30 min otherwise. Still
+   waiting on real commute-hour data to accumulate to confirm this actually
+   grows the rare classes faster; the mechanism (more samples exactly when
+   congestion happens) is sound but unverified until the data comes in.
+
+Separately unresolved: GitHub Actions' `schedule` trigger still doesn't
+reliably fire on time regardless of the cron expression (documented above,
+under Cron reliability) — this new schedule is the correct source of truth,
+but how closely GitHub actually honors it in practice is still an open
+question.
 
 ## Current state (as of this entry)
 
-- 2,102 labeled examples, 58 unique cameras.
-- Condition mix: clear 83%, congested 5.2%, slow 5.9%, stopped 3.3%,
-  unreadable 2.4%.
-- No distilled model shipped yet — correctly not ready; see above.
+- 2,117 labeled examples, 58 unique cameras (count will keep climbing from
+  here — this is a point-in-time snapshot, not a final total).
+- Condition mix (previous snapshot, pre-reweighting): clear 83%, congested
+  5.2%, slow 5.9%, stopped 3.3%, unreadable 2.4%. Expect this to shift as
+  commute-hour-weighted collection accumulates.
+- Travel-ratio coverage: was 57% of checkpoints, confirmed improved after
+  the radius widening (not yet re-measured as a percentage at scale).
+- No distilled model shipped yet — correctly not ready; the data pipeline
+  itself was the blocker, now being addressed.
