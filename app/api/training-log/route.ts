@@ -28,7 +28,9 @@ export async function GET(req: NextRequest) {
     const entries = raw.map((r) => (typeof r === 'string' ? JSON.parse(r) : r));
 
     const byCondition: Record<string, number> = {};
+    const embeddingByCondition: Record<string, number> = {};
     let withChangeSignal = 0;
+    let withEmbedding = 0;
     let atCeiling = 0;
     let densitySum = 0;
     let densityMin = Infinity;
@@ -37,6 +39,10 @@ export async function GET(req: NextRequest) {
     for (const e of entries) {
       byCondition[e.condition] = (byCondition[e.condition] ?? 0) + 1;
       if (e.change !== null && e.change !== undefined) withChangeSignal += 1;
+      if (e.embedding) {
+        withEmbedding += 1;
+        embeddingByCondition[e.condition] = (embeddingByCondition[e.condition] ?? 0) + 1;
+      }
       if (e.edgeDensity >= 1) atCeiling += 1;
       densitySum += e.edgeDensity;
       densityMin = Math.min(densityMin, e.edgeDensity);
@@ -50,6 +56,11 @@ export async function GET(req: NextRequest) {
       uniqueCameras: cameraIds.size,
       byCondition,
       withChangeSignal,
+      // Tracks progress toward having enough embedding-labeled data to
+      // train a real classifier (see PROJECT_LOG.md) - rows logged before
+      // the embedding model shipped will never have one.
+      withEmbedding,
+      embeddingByCondition,
       edgeDensityStats: {
         atCeiling,
         avg: entries.length ? densitySum / entries.length : null,
