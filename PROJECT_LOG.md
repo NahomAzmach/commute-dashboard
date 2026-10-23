@@ -263,15 +263,36 @@ exporters.
 check logged real 768-character base64 embeddings (576 bytes, exactly the
 expected size) on every checkpoint.
 
+### Tracking embedding volume toward a real training attempt
+
+Added `withEmbedding` and `embeddingByCondition` to the public stats
+endpoint so progress is checkable anytime without the gated export. Can't
+backfill the ~4,300 pre-embedding rows - the images behind them are gone,
+never stored, so this starts from zero regardless of how much
+five-number-feature data already exists.
+
+**Baseline, right after shipping:** 30 examples with an embedding (21
+clear, 9 slow; zero congested/stopped/unreadable yet - only ~1 hour of
+collection so far).
+
+**Rough target before attempting a real training run:** at least a few
+hundred examples in each of the rare classes (congested, stopped) with an
+embedding attached. This is an estimate based on how the five-number
+baseline behaved, not a guarantee the embedding model needs the same
+volume - richer features might need less, but there's no way to know
+until there's enough to actually try. Given current collection pace and
+how long the rare classes took to reach their present counts (weeks), this
+is realistically a multi-week wait, not days.
+
 ## Current state (as of this entry)
 
-- 4,321 labeled examples, 58 unique cameras, growing continuously.
+- 4,336 labeled examples, 58 unique cameras, growing continuously.
 - Condition mix: clear 3,422 (79%), slow 380 (8.8%), congested 298 (6.9%),
-  stopped 153 (3.5%), unreadable 68 (1.6%).
+  stopped 153 (3.5%), unreadable 68 (1.6%) (pre-embedding-tracking
+  snapshot, still accurate for the overall shape).
 - Change-signal coverage: 2,523 of 4,321 (58%).
-- Vision embeddings now logging on every new checkpoint (not present on
-  older rows - the pixels from before this was added are gone).
-- No distilled model shipped yet - correctly not ready. The next real
-  checkpoint is giving the embeddings enough volume to train a real
-  classifier on, then comparing it against the five-number baseline that
-  plateaued.
+- Embedding coverage: 30 of 4,336 (0.7%) - just started, see tracking
+  note above for the real baseline and target.
+- No distilled model shipped yet - correctly not ready, and now has a
+  concrete, trackable condition for when to try: enough embedding-labeled
+  volume in the rare classes.
