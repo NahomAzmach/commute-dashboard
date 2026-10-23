@@ -202,15 +202,76 @@ troubleshooting a PowerShell/curl syntax error. Both were rotated
 immediately. Lesson for next time — hand over the error output, not the
 full command with the secret still in it.
 
+### Rerunning the baseline after QStash: confirmed a plateau, not a fluke
+
+One day after the QStash migration the log had grown from 2,282 to 4,246
+rows and travel-ratio coverage had risen to 72% (from 57%) thanks to the
+radius widening. Reran both the linear model and the decision tree on this
+larger, better-covered data.
+
+- **Macro F1 stayed flat at ~0.21-0.22** across every variant (linear,
+  class-balanced linear, shallow tree, deeper tree) - more data and better
+  coverage did not break through the ceiling hit two weeks earlier.
+- **One real improvement**: the class-balanced linear model's congestion
+  detection got meaningfully better - 52% recall / 26% precision on
+  "congested" (F1 0.34), up from 42%/17%. Not a classifier to trust
+  standalone, but a usable secondary signal.
+- **Conclusion: the bottleneck was never data volume.** All five features
+  fed to every model tried (vehicle count, frame-diff change, travel ratio,
+  hour, incident) are single numbers *derived from* the image - a
+  classifier trained only on those can never learn anything the numbers
+  don't already express, no matter how much data it sees. This was the
+  user's own insight, prompted by asking "why not just use a vision model"
+  after being walked through the plateau.
+
+### The actual fix: a real vision embedding, not more hand-picked numbers
+
+Added `lib/visionEmbedding.ts`: a pretrained MobileNetV3-Small (ImageNet),
+truncated to its pooled feature layer before the classifier - 576 numbers
+that describe the actual visual content, computed via `onnxruntime-node`
+(the same deployment path already proven for vehicle detection) at the
+same point the image is already loaded for YOLO. Quantized to int8 and
+base64-encoded before logging (~700 bytes/example) rather than storing raw
+images - the past month+ of data never saved pixels, only derived numbers,
+so there's no way to retrofit this onto old rows; it starts capturing
+something richer going forward instead.
+
+Preprocessing (resize shorter side to 256, center-crop 224, ImageNet
+normalization) was built to replicate torchvision's official weights
+transform exactly, and validated locally against the real PyTorch model's
+output on real WSDOT images before shipping - 0.99 cosine similarity
+between the Node and Python pipelines on the same image.
+
+**A real deployment dead end, same spirit as the earlier WASM one, worth
+recording:** the first export (PyTorch's newer dynamo-based exporter)
+silently split the ~4MB model into a small graph file and a separate
+external-data weights file. Only the graph file got committed, so every
+embedding extraction failed in production immediately on session creation.
+Fixing that by shipping both files *didn't work either* - confirmed
+reproducible twice, not a fluke: Next's serverless file tracer would not
+include the external-data file in the deployed function no matter how it
+was referenced in `outputFileTracingIncludes`, matching the same class of
+tracer limitation hit during the vehicle-detection rollout (`.mjs` files
+back then). The real fix was avoiding external data entirely - re-exporting
+with `dynamo=False` (the legacy TorchScript-based exporter, same code path
+Ultralytics used for the YOLO export) keeps weights inline in one file,
+which traces and deploys correctly. Re-validated after re-exporting:
+identical 0.99 cosine similarity, confirming no quality was lost switching
+exporters.
+
+**Confirmed working in production**, not just deployed: the next real
+check logged real 768-character base64 embeddings (576 bytes, exactly the
+expected size) on every checkpoint.
+
 ## Current state (as of this entry)
 
-- 2,282+ labeled examples (growing continuously now, no longer gated by an
-  unreliable trigger), 58+ unique cameras.
-- Condition mix (previous snapshot, pre-reweighting): clear 83%, congested
-  5.2%, slow 5.9%, stopped 3.3%, unreadable 2.4%. Expect this to shift as
-  commute-hour-weighted collection accumulates — not yet re-measured since
-  the schedule change.
-- Travel-ratio coverage: was 57% of checkpoints, confirmed improved after
-  the radius widening (not yet re-measured as a percentage at scale).
-- No distilled model shipped yet — correctly not ready; the data pipeline
-  itself was the blocker, now being addressed.
+- 4,321 labeled examples, 58 unique cameras, growing continuously.
+- Condition mix: clear 3,422 (79%), slow 380 (8.8%), congested 298 (6.9%),
+  stopped 153 (3.5%), unreadable 68 (1.6%).
+- Change-signal coverage: 2,523 of 4,321 (58%).
+- Vision embeddings now logging on every new checkpoint (not present on
+  older rows - the pixels from before this was added are gone).
+- No distilled model shipped yet - correctly not ready. The next real
+  checkpoint is giving the embeddings enough volume to train a real
+  classifier on, then comparing it against the five-number baseline that
+  plateaued.
