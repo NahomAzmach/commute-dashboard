@@ -14,7 +14,12 @@ const nextConfig = {
   outputFileTracingIncludes: {
     'app/api/cron/check/route': [
       './models/yolov8n.onnx',
+      // embedding.onnx was exported with external data (PyTorch's newer
+      // dynamo-based exporter splits weights into a sibling .data file
+      // once a model is big enough) - both files must ship together, same
+      // directory, or onnxruntime-node fails session creation entirely.
       './models/embedding.onnx',
+      './models/embedding.onnx.data',
       './node_modules/onnxruntime-node/dist/**',
       './node_modules/onnxruntime-node/bin/napi-v6/linux/x64/onnxruntime_binding.node',
       './node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime.*',
@@ -22,6 +27,7 @@ const nextConfig = {
     'app/api/explore/route': [
       './models/yolov8n.onnx',
       './models/embedding.onnx',
+      './models/embedding.onnx.data',
       './node_modules/onnxruntime-node/dist/**',
       './node_modules/onnxruntime-node/bin/napi-v6/linux/x64/onnxruntime_binding.node',
       './node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime.*',
