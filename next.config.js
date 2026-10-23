@@ -14,12 +14,14 @@ const nextConfig = {
   outputFileTracingIncludes: {
     'app/api/cron/check/route': [
       './models/yolov8n.onnx',
+      './models/embedding.onnx',
       './node_modules/onnxruntime-node/dist/**',
       './node_modules/onnxruntime-node/bin/napi-v6/linux/x64/onnxruntime_binding.node',
       './node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime.*',
     ],
     'app/api/explore/route': [
       './models/yolov8n.onnx',
+      './models/embedding.onnx',
       './node_modules/onnxruntime-node/dist/**',
       './node_modules/onnxruntime-node/bin/napi-v6/linux/x64/onnxruntime_binding.node',
       './node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime.*',
