@@ -44,10 +44,6 @@ export async function GET(req: NextRequest) {
       cameraIds.add(e.cameraId);
     }
 
-    // TEMPORARY: surfaces the last vision-embedding error for production
-    // debugging (see lib/visionEmbedding.ts). Remove once diagnosed.
-    const lastEmbeddingError = await kv.get<string>('debug:visionEmbedding:lastError');
-
     return NextResponse.json({
       totalLogged: total,
       sampledForStats: entries.length,
@@ -60,7 +56,6 @@ export async function GET(req: NextRequest) {
         min: entries.length ? densityMin : null,
         max: entries.length ? densityMax : null,
       },
-      lastEmbeddingError,
       newest: entries.slice(0, 5),
     });
   } catch (error) {
