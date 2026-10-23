@@ -100,7 +100,17 @@ export async function getVisionEmbedding(bytes: Uint8Array): Promise<string | nu
     const results = await session.run({ [session.inputNames[0]]: tensor });
     const embedding = results[session.outputNames[0]].data as Float32Array;
     return quantize(embedding);
-  } catch {
+  } catch (err) {
+    // TEMPORARY: capture the real error for one round of production
+    // debugging - same pattern used for the earlier vehicle-detection
+    // rollout. This silently returns null either way, so it's safe.
+    // Remove once diagnosed.
+    const { Redis } = require('@upstash/redis');
+    void Redis.fromEnv().set(
+      'debug:visionEmbedding:lastError',
+      err instanceof Error ? `${err.message}\n${err.stack}` : String(err),
+      { ex: 3600 },
+    );
     return null;
   }
 }
