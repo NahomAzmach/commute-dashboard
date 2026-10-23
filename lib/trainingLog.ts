@@ -26,6 +26,13 @@ export type TrainingExample = {
   // a collision, incident, or closure sits within a mile. Independent road-level labels.
   travelRatio: number | null;
   incident: boolean;
+  // Base64-encoded, int8-quantized 576-dim MobileNetV3 embedding of the
+  // actual image (see lib/visionEmbedding.ts) - ~700 bytes/example, the
+  // real fix for the ceiling every hand-picked-feature model hit, since
+  // those numbers can never contain more than they already express.
+  // null on older rows (logged before this was added) and on any
+  // extraction failure - training code should handle its absence.
+  embedding: string | null;
   condition: Condition;
 };
 
