@@ -104,7 +104,7 @@ export default function AllCamerasMap({ cameras }: { cameras: BrowseCamera[] }) 
       img.src = url.toString();
     });
 
-    map.setView([47.5, -121.5], 7);
+    map.setView([47.55, -122.2], 8);
 
     return () => {
       map.remove();

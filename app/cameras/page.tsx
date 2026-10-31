@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { getWsdotCatalog } from '../../lib/wsdot';
 import { getSeattleCameraCatalog } from '../../lib/seattleCams';
 import AllCamerasMapLoader from '../../components/AllCamerasMapLoader';
+import LynnwoodCameraGrid from '../../components/LynnwoodCameraGrid';
+import CameraInsightSearch from '../../components/CameraInsightSearch';
 import type { BrowseCamera } from '../../components/AllCamerasMap';
 import { lynnwoodCameras } from '../../lib/lynnwoodCams';
 
@@ -49,8 +51,8 @@ export default async function AllCamerasPage() {
         <div>
           <h1 className="wordmark">All Cameras</h1>
           <p className="subline">
-            Every camera on file, statewide - {cameras.length.toLocaleString()} total. Click a
-            pin for a live still. No AI read here, just raw browsing.
+            Explore {cameras.length.toLocaleString()} WSDOT and Seattle DOT cameras across
+            Washington, focused on Puget Sound. Query recent AI reads below.
           </p>
         </div>
       </div>
@@ -78,10 +80,15 @@ export default async function AllCamerasPage() {
 
       <AllCamerasMapLoader cameras={cameras} />
 
+      <CameraInsightSearch />
+
+      <LynnwoodCameraGrid />
+
       <div className="foot">
         Camera locations + stills from WSDOT&apos;s Highway Cameras API and Seattle&apos;s
-        ArcGIS open-data feature service &middot; refreshed every 6 hours &middot; images load
-        on click, nothing pre-fetched
+        official camera services &middot; images load on click, nothing pre-fetched. Query results
+        use retained route observations; WSDOT currently documents current feeds, not a historical
+        archive. Lynnwood feeds are embedded below.
       </div>
     </main>
   );
