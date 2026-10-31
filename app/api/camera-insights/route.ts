@@ -206,19 +206,20 @@ function matchesQuery(row: TrainingRow, camera: CameraEntry, query: string): boo
   return locationWords.every((word) => searchable.includes(word));
 }
 
-export async function GET(req: NextRequest) {
-  const query = (req.nextUrl.searchParams.get('q') ?? '').trim().slice(0, 120);
-  const requestedHours = Number(req.nextUrl.searchParams.get('hours') ?? 3);
-  const hours = VALID_HOURS.has(requestedHours) ? requestedHours : 3;
-  const endTime = Date.now();
-  const startTime = endTime - hours * 60 * 60 * 1000;
+async function getRecentObservations(
+  startTime: number,
+  endTime: number,
+): Promise<{ observationsByCamera: Map<number, ObservationPair>; sampledRows: number }> {
+  const total = await kv.llen(LOG_KEY);
+  const limit = Math.min(total, SAMPLE_CAP);
+  const batchSize = 1000;
+  const observationsByCamera = new Map<number, ObservationPair>();
+  let sampledRows = 0;
 
-  try {
-    const total = await kv.llen(LOG_KEY);
-    const rows =
-      total > 0 ? await kv.lrange<string>(LOG_KEY, 0, Math.min(total, SAMPLE_CAP) - 1) : [];
-    const observationsByCamera = new Map<number, ObservationPair>();
-    for (const value of rows) {
+  for (let start = 0; start < limit; start += batchSize) {
+    const batch = await kv.lrange<string>(LOG_KEY, start, Math.min(limit - 1, start + batchSize - 1));
+    sampledRows += batch.length;
+    for (const value of batch) {
       const row = parseRow(value);
       if (!row || row.timestamp < startTime || row.timestamp > endTime) continue;
       const existing = observationsByCamera.get(row.cameraId);
@@ -234,6 +235,20 @@ export async function GET(req: NextRequest) {
         existing.previous = row;
       }
     }
+  }
+
+  return { observationsByCamera, sampledRows };
+}
+
+export async function GET(req: NextRequest) {
+  const query = (req.nextUrl.searchParams.get('q') ?? '').trim().slice(0, 120);
+  const requestedHours = Number(req.nextUrl.searchParams.get('hours') ?? 3);
+  const hours = VALID_HOURS.has(requestedHours) ? requestedHours : 3;
+  const endTime = Date.now();
+  const startTime = endTime - hours * 60 * 60 * 1000;
+
+  try {
+    const { observationsByCamera, sampledRows } = await getRecentObservations(startTime, endTime);
 
     const [wsdotCameras, seattleCameras] = await Promise.all([
       getWsdotCatalog(),
@@ -295,7 +310,7 @@ export async function GET(req: NextRequest) {
       {
         query,
         hours,
-        sampledRows: rows.length,
+        sampledRows,
         analyzedCameraCount: observationsByCamera.size,
         corridors,
         results: allResults.slice(0, MAX_RESULTS),
