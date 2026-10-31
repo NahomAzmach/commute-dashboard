@@ -12,36 +12,24 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 
 function buildMapRoutes(state: Awaited<ReturnType<typeof getState>>): MapRoute[] {
-  if (state.primary && state.alternate) {
-    return [state.primary, state.alternate].map((route) => ({
-      key: route.routeKey,
+  return ROUTES.map((route) => {
+    const liveRoute = route.key === 'primary' ? state.primary : state.alternate;
+    const liveById = new Map(liveRoute?.checkpoints.map((cp) => [cp.id, cp]) ?? []);
+
+    return {
+      key: route.key,
       label: route.label,
-      tone: toneForScore(route.delaySeverityScore),
-      checkpoints: route.checkpoints.map((cp) => ({
-        id: cp.id,
-        title: cp.title,
-        lat: cp.lat,
-        lon: cp.lon,
-        imageUrl: cp.imageUrl,
-        description: cp.description,
-        condition: cp.condition,
-      })),
-    }));
-  }
-  // No check has run yet - plot the static route config so the map still
-  // shows something meaningful, just without live descriptions or tone.
-  return ROUTES.map((route) => ({
-    key: route.key,
-    label: route.label,
-    tone: 'unknown' as const,
-    checkpoints: route.checkpoints.map((cp) => ({
-      id: cp.id,
-      title: cp.title,
-      lat: cp.lat,
-      lon: cp.lon,
-      imageUrl: cp.imageUrl,
-    })),
-  }));
+      tone: liveRoute ? toneForScore(liveRoute.delaySeverityScore) : ('unknown' as const),
+      checkpoints: route.checkpoints.map((cp) => {
+        const liveCheckpoint = liveById.get(cp.id);
+        return {
+          ...cp,
+          description: liveCheckpoint?.description,
+          condition: liveCheckpoint?.condition,
+        };
+      }),
+    };
+  });
 }
 
 export default async function CommutePage() {

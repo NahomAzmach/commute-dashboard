@@ -16,7 +16,8 @@ export const HOME = 'Mukilteo, WA';
 export const WORK = '777 108th Ave NE, Bellevue, WA (Symetra)';
 export const USUAL_LEAVE_TIME = '06:30';
 
-export const HOME_COORDS = { lat: 47.89259, lon: -122.31026 };
+// City-level map pin; keep the exact residential location off the public page.
+export const HOME_COORDS = { lat: 47.9445, lon: -122.3046 };
 export const WORK_COORDS = { lat: 47.617487, lon: -122.188531 };
 
 export const ROUTES: Route[] = [
