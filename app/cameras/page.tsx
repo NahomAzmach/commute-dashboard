@@ -8,10 +8,17 @@ import { lynnwoodCameras } from '../../lib/lynnwoodCams';
 export const dynamic = 'force-dynamic';
 
 export default async function AllCamerasPage() {
-  const [wsdotCameras, seattleCameras] = await Promise.all([
+  const [wsdotCameras, seattleResult] = await Promise.all([
     getWsdotCatalog(),
-    getSeattleCameraCatalog().catch(() => []),
+    getSeattleCameraCatalog().then(
+      (cameras) => ({ cameras, error: null }),
+      (error: unknown) => ({
+        cameras: [],
+        error: error instanceof Error ? error.message : 'Seattle camera catalog unavailable',
+      }),
+    ),
   ]);
+  const { cameras: seattleCameras, error: seattleError } = seattleResult;
 
   const cameras: BrowseCamera[] = [
     ...wsdotCameras.map((c) => ({ ...c, source: 'wsdot' as const })),
@@ -55,13 +62,19 @@ export default async function AllCamerasPage() {
         </span>
         <span>
           <span className="map-legend-dot" style={{ background: '#e8a33d' }} />
-          Seattle DOT ({seattleCameras.length.toLocaleString()})
+          Seattle DOT{' '}
+          {seattleError ? '(unavailable)' : `(${seattleCameras.length.toLocaleString()})`}
         </span>
         <span>
           <span className="map-legend-dot" style={{ background: '#60a5fa' }} />
           Lynnwood ({lynnwoodCameras.length})
         </span>
       </div>
+      {seattleError && (
+        <p className="explore-error" role="status">
+          Seattle DOT cameras couldn&apos;t be loaded: {seattleError}
+        </p>
+      )}
 
       <AllCamerasMapLoader cameras={cameras} />
 
