@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: commute-dashboard
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: AI_GATEWAY_API_KEY
+        sync: false
+      - key: NTFY_TOPIC
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: WSDOT_ACCESS_CODE
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
