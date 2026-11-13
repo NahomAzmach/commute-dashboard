@@ -805,6 +805,88 @@ h1.wordmark {
   gap: 12px;
 }
 
+.camera-archive-search {
+  border-top: 1px solid var(--line-dim);
+  padding-top: 22px;
+}
+
+.camera-archive-form {
+  margin: 16px 0;
+}
+
+.camera-detail-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(3, 7, 15, 0.82);
+  padding: 20px;
+}
+
+.camera-detail-panel {
+  position: relative;
+  width: min(680px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.55);
+  padding: 22px;
+}
+
+.camera-detail-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-deep);
+  color: var(--text-dim);
+  cursor: pointer;
+  font: 10px var(--font-mono);
+  padding: 0 9px;
+}
+
+.camera-detail-kicker {
+  color: var(--teal);
+  font: 10px var(--font-mono);
+  letter-spacing: 0.1em;
+  margin: 0 70px 8px 0;
+}
+
+.camera-detail-panel h2 {
+  color: var(--text-primary);
+  font: 17px var(--font-mono);
+  line-height: 1.45;
+  margin: 0 64px 14px 0;
+}
+
+.camera-detail-image {
+  display: block;
+  width: 100%;
+  max-height: 55vh;
+  border: 1px solid var(--line-dim);
+  border-radius: 4px;
+  background: #000;
+  object-fit: contain;
+}
+
+.camera-detail-save {
+  min-height: 42px;
+  width: 100%;
+}
+
+.camera-detail-message {
+  border-left: 2px solid var(--teal);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+}
+
 .camera-insight-card {
   min-width: 0;
   overflow: hidden;
@@ -947,6 +1029,15 @@ h1.wordmark {
 
   .camera-query-button {
     flex: 1;
+  }
+
+  .camera-detail-backdrop {
+    align-items: end;
+    padding: 8px;
+  }
+
+  .camera-detail-panel {
+    padding: 17px;
   }
 }
 

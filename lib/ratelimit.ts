@@ -22,3 +22,15 @@ export async function checkRateLimit(
     return { allowed: true, remaining: limit };
   }
 }
+
+export async function checkRateLimitStrict(
+  key: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<{ allowed: boolean; remaining: number }> {
+  const count = await kv.incr(key);
+  if (count === 1) {
+    await kv.expire(key, windowSeconds);
+  }
+  return { allowed: count <= limit, remaining: Math.max(0, limit - count) };
+}

@@ -4,6 +4,7 @@ import { getSeattleCameraCatalog } from '../../lib/seattleCams';
 import AllCamerasMapLoader from '../../components/AllCamerasMapLoader';
 import LynnwoodCameraGrid from '../../components/LynnwoodCameraGrid';
 import CameraInsightSearch from '../../components/CameraInsightSearch';
+import CameraArchiveSearch from '../../components/CameraArchiveSearch';
 import type { BrowseCamera } from '../../components/AllCamerasMap';
 import { lynnwoodCameras } from '../../lib/lynnwoodCams';
 
@@ -82,13 +83,14 @@ export default async function AllCamerasPage() {
 
       <CameraInsightSearch />
 
+      <CameraArchiveSearch />
+
       <LynnwoodCameraGrid />
 
       <div className="foot">
         Camera locations + stills from WSDOT&apos;s Highway Cameras API and Seattle&apos;s
-        official camera services &middot; images load on click, nothing pre-fetched. Query results
-        use retained route observations; WSDOT currently documents current feeds, not a historical
-        archive. Lynnwood feeds are embedded below.
+        official camera services. Historical image matches come only from frames explicitly saved
+        by a user; the other camera feeds remain current-only. Lynnwood feeds are embedded below.
       </div>
     </main>
   );

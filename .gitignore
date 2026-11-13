@@ -6,3 +6,5 @@ node_modules/
 next-env.d.ts
 *.log
 training.json
+services/embedding-worker/.venv/
+services/embedding-worker/__pycache__/

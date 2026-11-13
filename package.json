@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
+    "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@types/leaflet.markercluster": "^1.5.6",
     "@upstash/redis": "^1.39.0",
     "ai": "^7.0.118",

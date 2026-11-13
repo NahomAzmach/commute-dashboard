@@ -87,6 +87,18 @@ function quantize(embedding: Float32Array): string {
   return Buffer.from(out).toString('base64');
 }
 
+async function infer(bytes: Uint8Array): Promise<Float32Array> {
+  const session = await getSession();
+  const input = await preprocess(bytes);
+  const tensor = new ort.Tensor('float32', input, [1, 3, CROP, CROP]);
+  const results = await session.run({ [session.inputNames[0]]: tensor });
+  const data = results[session.outputNames[0]].data;
+  if (!(data instanceof Float32Array) || data.length !== 576) {
+    throw new Error('vision model returned an invalid embedding');
+  }
+  return data;
+}
+
 /**
  * Returns a base64-encoded, int8-quantized 576-dim vision embedding for
  * this image, or null on any failure - this is a training-data signal,
@@ -94,12 +106,7 @@ function quantize(embedding: Float32Array): string {
  */
 export async function getVisionEmbedding(bytes: Uint8Array): Promise<string | null> {
   try {
-    const session = await getSession();
-    const input = await preprocess(bytes);
-    const tensor = new ort.Tensor('float32', input, [1, 3, CROP, CROP]);
-    const results = await session.run({ [session.inputNames[0]]: tensor });
-    const embedding = results[session.outputNames[0]].data as Float32Array;
-    return quantize(embedding);
+    return quantize(await infer(bytes));
   } catch {
     return null;
   }

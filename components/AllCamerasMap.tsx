@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
@@ -24,12 +24,15 @@ const SOURCE_COLOR = {
 } as const;
 
 /**
- * Browse view of statewide cameras plus Lynnwood DaCast cameras.
- * Lynnwood markers open their DaCast live player in the popup.
+ * Browse statewide cameras. WSDOT and Seattle dots open an explicit
+ * single-camera detail panel; Lynnwood markers retain their live player popup.
  */
 export default function AllCamerasMap({ cameras }: { cameras: BrowseCamera[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const [selectedCamera, setSelectedCamera] = useState<BrowseCamera | null>(null);
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const [captureMessage, setCaptureMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -53,14 +56,12 @@ export default function AllCamerasMap({ cameras }: { cameras: BrowseCamera[] }) 
         iconAnchor: [5, 5],
       });
 
-      const popupHtml = `
-        <div style="font-family: var(--font-mono, monospace); font-size: 12px; max-width: 220px;">
-          <div style="font-weight:600; margin-bottom:4px;">${escapeHtml(cam.title)}</div>
-          <img src="${cam.imageUrl}" data-live-src="${cam.imageUrl}" alt="" style="width:100%; border-radius:4px; display:block;" />
-        </div>
-      `;
-
-      L.marker([cam.lat, cam.lon], { icon }).addTo(clusterGroup).bindPopup(popupHtml);
+      const marker = L.marker([cam.lat, cam.lon], { icon });
+      marker.on('click', () => {
+        setSelectedCamera(cam);
+        setCaptureMessage(null);
+      });
+      marker.addTo(clusterGroup);
     }
 
     for (const cam of lynnwoodCameras) {
@@ -113,7 +114,106 @@ export default function AllCamerasMap({ cameras }: { cameras: BrowseCamera[] }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={containerRef} className="route-map all-cameras-map" />;
+  async function saveSelectedMoment() {
+    if (!selectedCamera || captureBusy) return;
+    setCaptureBusy(true);
+    setCaptureMessage(null);
+    try {
+      const response = await fetch('/api/camera-archive/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cameraId: selectedCamera.id,
+          source: selectedCamera.source,
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        outcome?: 'stored' | 'duplicate';
+      };
+      if (!response.ok) throw new Error(result.error ?? `Save failed (${response.status})`);
+      setCaptureMessage(
+        result.outcome === 'duplicate'
+          ? 'This frame is almost unchanged from a recent saved moment; its time range was updated.'
+          : 'This camera moment was saved and indexed for natural-language search.',
+      );
+    } catch (error) {
+      setCaptureMessage(
+        error instanceof Error ? error.message : 'Could not save this camera moment.',
+      );
+    } finally {
+      setCaptureBusy(false);
+    }
+  }
+
+  const liveImageUrl = selectedCamera
+    ? new URL(selectedCamera.imageUrl, window.location.href)
+    : null;
+  liveImageUrl?.searchParams.set('t', String(Date.now()));
+
+  return (
+    <>
+      <div ref={containerRef} className="route-map all-cameras-map" />
+      {selectedCamera && liveImageUrl && (
+        <div
+          className="camera-detail-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !captureBusy) {
+              setSelectedCamera(null);
+              setCaptureMessage(null);
+            }
+          }}
+        >
+          <section
+            className="camera-detail-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="camera-detail-title"
+          >
+            <button
+              className="camera-detail-close"
+              type="button"
+              onClick={() => {
+                if (!captureBusy) {
+                  setSelectedCamera(null);
+                  setCaptureMessage(null);
+                }
+              }}
+              aria-label="Close camera details"
+            >
+              CLOSE
+            </button>
+            <p className="camera-detail-kicker">
+              {selectedCamera.source === 'wsdot' ? 'WSDOT' : 'SEATTLE DOT'} / LIVE STILL
+            </p>
+            <h2 id="camera-detail-title">{selectedCamera.title}</h2>
+            <img
+              className="camera-detail-image"
+              src={liveImageUrl.toString()}
+              alt={`Current live camera still: ${selectedCamera.title}`}
+            />
+            <p className="camera-query-note">
+              Only this selected camera image will be saved and embedded. Other camera feeds will
+              not be fetched or processed.
+            </p>
+            <button
+              className="camera-query-button camera-detail-save"
+              type="button"
+              onClick={saveSelectedMoment}
+              disabled={captureBusy}
+            >
+              {captureBusy ? 'INDEXING THIS FRAME…' : 'SAVE AND INDEX THIS MOMENT'}
+            </button>
+            {captureMessage && (
+              <p className="camera-detail-message" role="status">
+                {captureMessage}
+              </p>
+            )}
+          </section>
+        </div>
+      )}
+    </>
+  );
 }
 
 function escapeHtml(input: string): string {

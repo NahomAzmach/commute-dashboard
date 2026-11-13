@@ -16,7 +16,7 @@ Ripped that out for one call: every camera image goes to Gemini 2.5 Flash-Lite a
 
 ```mermaid
 flowchart TD
-    A["Scheduled trigger (GitHub Actions,\nweekday mornings every 10 min)\nor a visitor submitting /explore"] --> B{Which path?}
+    A["Scheduled trigger (Upstash QStash)\nor a visitor submitting /explore"] --> B{Which path?}
     B -->|My commute| C["Two fixed routes\nfrom lib/checkpoints.ts"]
     B -->|/explore| D["Geocode start + end\n(OpenStreetMap Nominatim)"]
     D --> E["Get real driving path\n(OSRM)"]
@@ -35,8 +35,18 @@ flowchart TD
 
 ## Stack, roughly
 
-Next.js on Vercel, Upstash Redis for state + rate limiting, GitHub Actions for scheduling (Vercel's own cron jobs cap out at once/day on the free tier), Gemini 2.5 Flash-Lite via Vercel's AI Gateway for the actual reads, and OSRM + Nominatim for the `/explore` routing/geocoding.
+Next.js on Vercel, Upstash Redis for state + rate limiting, Upstash QStash for scheduled jobs, Gemini 2.5 Flash-Lite via Vercel's AI Gateway for the actual reads, and OSRM + Nominatim for the `/explore` routing/geocoding.
 
 **WSDOT APIs:**
 - **Highway Cameras API** — the live still images every check is built on.
 - **Traffic Flow API** — real loop-detector sensor readings near each camera, independent of the image entirely, shown as a "Sensor: ___" reading next to the AI's own read. Early results are mixed — it sometimes disagrees with what's visibly happening in the frame, so treat it as a second opinion, not ground truth.
+
+## Searchable camera moments
+
+I added a small experiment to **All Cameras**: click a WSDOT or Seattle DOT
+camera to save its current still, then search the saved moments in plain
+English. It only searches frames you chose to save—there's no camera-wide
+sampler or made-up history. For now, EmbeddingGemma 2 runs in a local worker;
+images go to private Cloudflare R2, with vectors in Supabase pgvector. See
+[`docs/camera-archive-setup.md`](docs/camera-archive-setup.md) for setup and
+the Render/local-worker limitation.
